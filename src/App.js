@@ -200,10 +200,6 @@ const AuthScreen = ({ onLoginSuccess, onCancel }) => {
             {loading ? 'جاري التحقق...' : 'تسجيل الدخول'}
           </button>
         </form>
-        
-        <div className="mt-4 text-center text-xs text-slate-400 border-t border-slate-100 pt-4">
-          استخدم: admin@print.com للدخول
-        </div>
       </div>
     </div>
   );
@@ -687,6 +683,32 @@ const AdminPanel = ({ prices, onUpdatePrice, onLogout, currentUser, generalSetti
           <div className="animate-in fade-in duration-300 p-4">
             <div className="flex items-center gap-3 mb-6 text-slate-800 border-b border-slate-200 pb-4"><Sliders className="w-6 h-6" /><h3 className="font-bold text-xl">إعدادات عامة</h3></div>
             
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-4">
+              <h4 className="font-bold text-[#337159] mb-4 text-lg border-b pb-2">إعدادات الأسعار والربح</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-2">نسبة الضريبة (VAT) %</label>
+                    <input 
+                      type="number" 
+                      value={localGeneral.taxRate ?? 15} 
+                      onChange={(e) => setLocalGeneral({...localGeneral, taxRate: parseFloat(e.target.value)})} 
+                      className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#337159] outline-none text-lg text-center font-bold text-[#337159]"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">النسبة المئوية لضريبة القيمة المضافة (الافتراضي 15%)</p>
+                 </div>
+                 <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-2">نسبة هامش الربح %</label>
+                    <input 
+                      type="number" 
+                      value={localGeneral.profitMargin ?? 15} 
+                      onChange={(e) => setLocalGeneral({...localGeneral, profitMargin: parseFloat(e.target.value)})} 
+                      className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#337159] outline-none text-lg text-center font-bold text-[#337159]"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">النسبة المضافة فوق التكلفة كربح (الافتراضي 15%)</p>
+                 </div>
+              </div>
+            </div>
+
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between mb-4">
               <div>
                 <h4 className="font-bold text-slate-800 mb-1">تفعيل إدخال الأسعار يدوياً للموظف</h4>
@@ -828,6 +850,10 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
     let unitPrice = 0;
     const isCustomPriceActive = generalSettings?.allowPriceOverride && customUnitPrice !== '' && !isNaN(parseFloat(customUnitPrice));
     
+    // Configurable Tax & Margin
+    const taxRate = (generalSettings?.taxRate ?? 15) / 100;
+    const marginRate = 1 + ((generalSettings?.profitMargin ?? 15) / 100);
+
     if (activeTab === 'roll') {
       const stickerW = inputs.width; const stickerH = inputs.height; const qty = inputs.quantity; const rollW = inputs.rollWidth;
       
@@ -835,7 +861,7 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
 
       const stickersPerRow = Math.floor(rollW / (stickerW + 0.2)); const rowsNeeded = stickersPerRow > 0 ? Math.ceil(qty / stickersPerRow) : 0; const baseLengthMeters = (rowsNeeded * (stickerH + 0.2)) / 100; const marginCount = Math.floor(baseLengthMeters / 0.5); const finalLength = baseLengthMeters + (marginCount * 0.05); const area = finalLength * (rollW / 100); 
       
-      let finalPrice = area * unitPrice * 1.15; 
+      let finalPrice = area * unitPrice * marginRate; 
       
       const discountPercent = getDiscountPercent(area, prices.rollDiscounts);
       const discountAmount = finalPrice * (discountPercent / 100);
@@ -899,7 +925,7 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
       }
 
       const pricePreTax = basePrice + totalAddonsPrice + foilCost;
-      const tax = pricePreTax * 0.15; 
+      const tax = pricePreTax * taxRate; 
       const finalPrice = pricePreTax + tax;
 
       const discountPercent = getDiscountPercent(sheetsNeeded, prices.digitalDiscounts);
@@ -916,7 +942,7 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
               const worstAddons = worstSheetsNeeded * addonsCostPerSheet;
               
               const worstPricePreTax = worstBasePrice + worstAddons + foilCost;
-              const worstTax = worstPricePreTax * 0.15;
+              const worstTax = worstPricePreTax * taxRate;
               const worstFinalPrice = worstPricePreTax + worstTax;
               
               const worstDiscountPercent = getDiscountPercent(worstSheetsNeeded, prices.digitalDiscounts);
@@ -977,9 +1003,10 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
         const paperCost = (totalSheetsIncludingWaste / 1000) * paperPricePer1000;
 
         const subTotal = plateCost + actualPrintCost + paperCost;
-        const total = subTotal * 1.15; // Margin? Let's assume raw calc then margin. Or user inputs include margin.
-        // Let's add 20% margin for offset usually.
-        const finalPrice = total * 1.20;
+        const total = subTotal * marginRate; 
+        
+        // Removed double margin: const finalPrice = total * 1.20; 
+        const finalPrice = total; 
 
         const discountPercent = getDiscountPercent(sheetsNeeded, prices.offsetDiscounts);
         const discountAmount = finalPrice * (discountPercent / 100);
@@ -996,7 +1023,7 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
       
       unitPrice = isCustomPriceActive ? parseFloat(customUnitPrice) : (prices.uvDtfPrice || 0);
 
-      const finalPrice = (metersConsumed * unitPrice) * 1.15;
+      const finalPrice = (metersConsumed * unitPrice) * marginRate;
       const discountPercent = getDiscountPercent(metersConsumed, prices.uvDtfDiscounts);
       const discountAmount = finalPrice * (discountPercent / 100);
       const priceAfterDiscount = finalPrice - discountAmount;
@@ -1269,7 +1296,7 @@ const CalculatorApp = ({ prices, onAdminLogin, currentUser, generalSettings }) =
               )}
               {activeTab === 'uvdtf' && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <ResultBox label="العدد في الصف" value={results.itemsPerRow} /><ResultBox label="عدد الصفوف" value={results.totalRows} /><ResultBox label="الأمتار المستهلكة" value={results.metersConsumed?.toFixed(3)} highlighted />
+                  <ResultBox label="عدد في الصف" value={results.itemsPerRow} /><ResultBox label="عدد الصفوف" value={results.totalRows} /><ResultBox label="الأمتار المستهلكة" value={results.metersConsumed?.toFixed(3)} highlighted />
                   <div className="col-span-2 md:col-span-3 mt-4 bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-2">
                     <div className="flex justify-between items-center text-slate-500"><span>السعر الأساسي:</span><span>{Math.round(results.finalPrice || 0)} ريال</span></div>
                     {results.discountPercent > 0 && (<div className="flex justify-between items-center text-[#337159]"><span>خصم الكمية ({results.discountPercent}%):</span><span>-{Math.round(results.discountAmount)} ريال</span></div>)}
@@ -1333,6 +1360,18 @@ export default function App() {
       setLoading(false);
     };
     initAuth();
+  }, []);
+
+  useEffect(() => {
+    // Add Cairo Font
+    const link = document.createElement('link');
+    link.href = "https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;700;800;900&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+
+    const style = document.createElement('style');
+    style.innerHTML = `* { font-family: 'Cairo', sans-serif; }`;
+    document.head.appendChild(style);
   }, []);
 
   useEffect(() => {
@@ -1405,7 +1444,7 @@ export default function App() {
     setView('calculator');
   };
 
-  if (loading) return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-500 gap-4"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div><p>جاري التحميل...</p></div>);
+  if (loading) return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-500 gap-4"><div className="w-10 h-10 border-4 border-[#337159] border-t-transparent rounded-full animate-spin"></div><p>جاري التحميل...</p></div>);
 
   if (view === 'login') {
     return <AuthScreen onLoginSuccess={handleAdminLogin} onCancel={() => setView('calculator')} />;
