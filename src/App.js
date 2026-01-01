@@ -189,7 +189,7 @@ const BalanceConfirmationApp = () => {
               value={formData.balanceAmount}
               onChange={handleChange}
               step="0.01"
-              className="w-full p-2 border border-gray-300 rounded-md font-mono font-bold text-lg text-green-700"
+              className="w-full p-2 border border-gray-300 rounded-md font-mono font-bold text-lg text-black"
             />
           </div>
 
@@ -394,11 +394,9 @@ const BalanceConfirmationApp = () => {
                </div>
             </div>
 
-            
-
             {/* ---- قسم الرد (Confirmation Section) ---- */}
-            <div className="border-t-2 border-dashed border-gray-400 pt-2  relative z-10 mt-[18px]">
-               <div className=" p-3 border border-gray-300 rounded-lg">
+            <div className="border-t-2 border-dashed border-gray-400 pt-2 relative z-10 mt-[18px]">
+               <div className="p-3 border border-gray-300 rounded-lg">
                   <div className="flex justify-between mb-3 border-b border-gray-300 pb-1">
                      <h3 className="font-bold text-base">Confirmation Reply</h3>
                      <h3 className="font-bold text-base">رد المصادقة</h3>
@@ -430,7 +428,8 @@ const BalanceConfirmationApp = () => {
                              <div className="w-5 h-5 border border-black flex-shrink-0"></div>
                              <p className="text-xs font-medium leading-none pt-0.5">We do not agree. The balance in our books is:</p>
                           </div>
-                          <div className="border-b border-dotted border-black h-6 w-full mt-1 ml-7"></div>
+                          {/* تم إصلاح الخطأ هنا */}
+                          <div className="border-b border-dotted border-black h-6 w-[88%] mt-1 ml-7" style={{border :"1px solid black",padding:"18px 0"}}></div>
                        </div>
                        
                        {/* Arabic Part */}
@@ -439,7 +438,7 @@ const BalanceConfirmationApp = () => {
                              <div className="w-5 h-5 border border-black flex-shrink-0"></div>
                              <p className="text-xs font-medium leading-none pt-0.5">إننا لا نوافق على صحة الرصيد، فالرصيد لدينا هو:</p>
                           </div>
-                          <div className="border-b border-dotted border-black h-6 w-full mt-1 mr-7"></div>
+                          <div className="border-b border-dotted border-black h-6 w-[88%] mt-1 mr-7" style={{border :"1px solid black",padding:"18px 0"}}></div>
                        </div>
                     </div>
                   </div>
@@ -461,7 +460,8 @@ const BalanceConfirmationApp = () => {
                   </div>
                </div>
             </div>
-{/* التوقيعات (إدارة الشركة) مع الختم */}
+            
+            {/* التوقيعات (إدارة الشركة) مع الختم */}
             <div className="flex justify-end mt-2 mb-2" style={{marginTop:"-5px"}}>
                <div className="text-center w-64 relative">
                  <div className="h-20 flex items-end justify-center pb-2 relative">
@@ -474,7 +474,6 @@ const BalanceConfirmationApp = () => {
                         crossOrigin="anonymous"
                       />
                     )}
-                    {/* التوقيع النصي */}
                  </div>
                </div>
             </div>
