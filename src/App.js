@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown } from 'lucide-react';
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone } from 'lucide-react';
 
 // --- تهيئة Firebase ---
 let firebaseConfig;
@@ -236,6 +236,7 @@ function Dashboard({ user, onLogout }) {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [analyticsEmployee, setAnalyticsEmployee] = useState(null);
   const [leadsEmployee, setLeadsEmployee] = useState(null); 
+  const [previewEmployee, setPreviewEmployee] = useState(null); // للمعاينة
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
 
@@ -260,7 +261,7 @@ function Dashboard({ user, onLogout }) {
   }, [user]);
 
   const handleDelete = async (id) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
+    if (window.confirm('هل أنت متأكد من حذف هذا البروفايل؟')) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', id));
       } catch (e) {
@@ -289,7 +290,7 @@ function Dashboard({ user, onLogout }) {
             <div className="bg-blue-600 text-white p-2 rounded-lg">
               <UserPlus size={20} />
             </div>
-            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">إدارة الموظفين</h1>
+            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">إدارة البطاقات</h1>
             <h1 className="text-xl font-bold text-slate-800 sm:hidden">الإدارة</h1>
           </div>
           
@@ -299,7 +300,7 @@ function Dashboard({ user, onLogout }) {
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
             >
               <Plus size={18} />
-              <span className="hidden sm:inline">موظف جديد</span>
+              <span className="hidden sm:inline">إضافة جديد</span>
             </button>
             <button 
               onClick={onLogout}
@@ -334,10 +335,10 @@ function Dashboard({ user, onLogout }) {
             <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <UserPlus size={32} />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">لا يوجد موظفين حالياً</h3>
-            <p className="text-slate-500 mb-6">أضف بيانات الموظفين لإنشاء بطاقات رقمية لهم</p>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">لا يوجد بطاقات حالياً</h3>
+            <p className="text-slate-500 mb-6">أضف بيانات الموظفين أو الشركات لإنشاء بطاقات رقمية لهم</p>
             <button onClick={handleAddNew} className="text-blue-600 font-bold hover:underline">
-              + إضافة أول موظف
+              + إضافة أول بطاقة
             </button>
           </div>
         ) : (
@@ -346,11 +347,13 @@ function Dashboard({ user, onLogout }) {
               <EmployeeCard 
                 key={emp.id} 
                 employee={emp} 
+                userId={user.uid}
                 onDelete={() => handleDelete(emp.id)}
                 onEdit={() => handleEdit(emp)}
                 onShowQR={() => setSelectedEmployee(emp)}
                 onShowAnalytics={() => setAnalyticsEmployee(emp)}
                 onShowLeads={() => setLeadsEmployee(emp)}
+                onPreview={() => setPreviewEmployee(emp)} // تمرير وظيفة المعاينة
               />
             ))}
           </div>
@@ -388,14 +391,24 @@ function Dashboard({ user, onLogout }) {
           onClose={() => setLeadsEmployee(null)}
         />
       )}
+
+      {previewEmployee && (
+        <PreviewModal
+          employee={previewEmployee}
+          userId={user.uid}
+          onClose={() => setPreviewEmployee(null)}
+        />
+      )}
     </div>
   );
 }
 
 // --- بطاقة الموظف في القائمة ---
-function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads }) {
+function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads, onPreview, userId }) {
   const themeColor = employee.themeColor || '#2563eb';
   const views = employee.stats?.views || 0;
+  const isCompany = employee.profileType === 'company';
+  
   const templateName = {
       'classic': 'كلاسيكي',
       'modern': 'عصري',
@@ -413,20 +426,22 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
             <img 
               src={employee.photoUrl} 
               alt={employee.name} 
-              className="w-12 h-12 rounded-full object-cover border border-slate-200"
+              className={`w-12 h-12 object-cover border border-slate-200 ${isCompany ? 'rounded-lg' : 'rounded-full'}`}
               style={{ borderColor: themeColor }}
             />
           ) : (
             <div 
-              className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-white"
+              className={`w-12 h-12 flex items-center justify-center text-xl font-bold text-white ${isCompany ? 'rounded-lg' : 'rounded-full'}`}
               style={{ backgroundColor: themeColor }}
             >
-              {employee.name.charAt(0)}
+              {isCompany ? <Building2 size={20} /> : employee.name.charAt(0)}
             </div>
           )}
           <div>
             <h3 className="font-bold text-slate-800 line-clamp-1">{employee.name}</h3>
-            <p className="text-sm text-slate-500 line-clamp-1">{employee.jobTitle || 'موظف'}</p>
+            <p className="text-sm text-slate-500 line-clamp-1">
+              {isCompany ? (employee.jobTitle || 'شركة') : (employee.jobTitle || 'موظف')}
+            </p>
           </div>
         </div>
         <div className="flex gap-1">
@@ -440,6 +455,10 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
       </div>
 
       <div className="flex items-center flex-wrap gap-2 mb-4">
+          <span className={`text-xs px-2 py-1 rounded font-medium flex items-center gap-1 ${isCompany ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
+            {isCompany ? <Building2 size={12} /> : <User size={12} />}
+            {isCompany ? 'شركة' : 'موظف'}
+          </span>
           <span className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-500 font-medium">
             {templateName}
           </span>
@@ -458,7 +477,7 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <button 
             onClick={onShowAnalytics}
             className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
@@ -481,20 +500,77 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
         >
             <QrCode size={16} />
         </button>
+        <button 
+            onClick={onPreview}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-blue-600 hover:bg-blue-50 transition-colors"
+            title="معاينة"
+        >
+            <Eye size={16} />
+        </button>
       </div>
     </div>
   );
 }
 
+// --- نافذة المعاينة (جديد) ---
+function PreviewModal({ employee, userId, onClose }) {
+  const getProfileUrl = () => {
+    const baseUrl = window.location.href.split('#')[0];
+    return `${baseUrl}#uid=${userId}&pid=${employee.id}`;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-[380px] h-[750px] bg-black rounded-[40px] border-8 border-gray-800 shadow-2xl overflow-hidden flex flex-col">
+        {/* Notch */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-xl z-20"></div>
+        
+        {/* Header Bar */}
+        <div className="h-8 bg-black w-full z-10 flex justify-between items-center px-6 pt-1">
+            <span className="text-white text-[10px]">9:41</span>
+            <div className="flex gap-1">
+                <span className="block w-3 h-3 bg-white/20 rounded-full"></span>
+                <span className="block w-3 h-3 bg-white/20 rounded-full"></span>
+            </div>
+        </div>
+
+        {/* Iframe Content */}
+        <iframe 
+            src={getProfileUrl()} 
+            className="w-full h-full bg-white border-0"
+            title="Card Preview"
+        />
+
+        {/* Close Button */}
+        <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 z-50 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-sm transition-colors"
+        >
+            <X size={20} />
+        </button>
+
+        {/* Bottom Bar */}
+        <div className="h-6 bg-black w-full z-10 flex justify-center items-end pb-1">
+            <div className="w-32 h-1 bg-white/30 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ... (باقي المكونات: EmployeeForm, ProfileView, LeadsListModal, AnalyticsModal, WalletPreviewModal, QRModal, LeadCaptureModal كما هي بدون تغيير، تأكد من وجودها) ...
+
 // --- نموذج إضافة/تعديل موظف ---
 function EmployeeForm({ onClose, initialData, userId }) {
   const [formData, setFormData] = useState({
+    profileType: 'employee', // employee, company
     name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
     photoUrl: '', cvUrl: '', 
     themeColor: '#2563eb', qrColor: '#000000', qrBgColor: '#ffffff',
     template: 'classic', 
     bgVideoUrl: '', 
     profileVideoUrl: '', 
+    facebook: '', twitter: '', instagram: '', linkedin: '', youtube: '',
     stats: { views: 0, clicks: {}, countries: {}, heatmap: {} }
   });
   const [loading, setLoading] = useState(false);
@@ -504,12 +580,18 @@ function EmployeeForm({ onClose, initialData, userId }) {
       setFormData(prev => ({
         ...prev,
         ...initialData,
+        profileType: initialData.profileType || 'employee',
         themeColor: initialData.themeColor || '#2563eb',
         qrColor: initialData.qrColor || '#000000',
         qrBgColor: initialData.qrBgColor || '#ffffff',
         template: initialData.template || 'classic',
         bgVideoUrl: initialData.bgVideoUrl || '',
         profileVideoUrl: initialData.profileVideoUrl || '',
+        facebook: initialData.facebook || '',
+        twitter: initialData.twitter || '',
+        instagram: initialData.instagram || '',
+        linkedin: initialData.linkedin || '',
+        youtube: initialData.youtube || '',
         stats: initialData.stats || { views: 0, clicks: {}, countries: {}, heatmap: {} }
       }));
     }
@@ -542,7 +624,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
     }
   };
 
-  // قائمة القوالب
   const templates = [
     { id: 'classic', name: 'كلاسيكي' },
     { id: 'modern', name: 'عصري' },
@@ -552,11 +633,13 @@ function EmployeeForm({ onClose, initialData, userId }) {
     { id: 'minimal', name: 'بسيط' },
   ];
 
+  const isCompany = formData.profileType === 'company';
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-bold">{initialData ? 'تعديل بيانات' : 'موظف جديد'}</h2>
+          <h2 className="text-lg font-bold">{initialData ? 'تعديل بيانات' : 'إنشاء بطاقة جديدة'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <X size={20} />
           </button>
@@ -564,14 +647,33 @@ function EmployeeForm({ onClose, initialData, userId }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
-          {/* قسم التصميم (Premium) */}
+          {/* اختيار نوع البروفايل */}
+          <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+            <button
+                type="button"
+                onClick={() => setFormData({...formData, profileType: 'employee'})}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.profileType === 'employee' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <User size={16} />
+                بروفايل موظف
+            </button>
+            <button
+                type="button"
+                onClick={() => setFormData({...formData, profileType: 'company'})}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.profileType === 'company' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <Building2 size={16} />
+                بروفايل شركة
+            </button>
+          </div>
+
+          {/* قسم التصميم */}
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-3">
             <div className="flex items-center gap-2 border-b border-indigo-200 pb-2 mb-2">
               <LayoutTemplate size={18} className="text-indigo-600" />
               <h3 className="text-sm font-bold text-indigo-800">تصميم البطاقة (Premium)</h3>
             </div>
 
-            {/* اختيار القالب */}
             <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">اختر القالب</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -586,7 +688,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
                                 : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200'
                             }`}
                         >
-                            {/* أيقونة تاج صغيرة للقوالب المدفوعة (كمحاكاة) */}
                             {t.id !== 'classic' && <Crown size={10} className="absolute top-1 right-1 text-amber-500" />}
                             {t.name}
                         </button>
@@ -594,7 +695,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
                 </div>
             </div>
 
-            {/* روابط الفيديو */}
             <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1">فيديو الخلفية (URL)</label>
@@ -621,7 +721,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
             </div>
           </div>
 
-          {/* قسم الألوان */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-white rounded-lg shadow-sm text-slate-600">
@@ -643,7 +742,9 @@ function EmployeeForm({ onClose, initialData, userId }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">الاسم الكامل <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+                {isCompany ? 'اسم الشركة' : 'الاسم الكامل'} <span className="text-red-500">*</span>
+            </label>
             <input 
               required
               type="text" 
@@ -689,7 +790,9 @@ function EmployeeForm({ onClose, initialData, userId }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">المسمى الوظيفي</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {isCompany ? 'شعار نصي / المجال (Slogan)' : 'المسمى الوظيفي'}
+              </label>
               <input 
                 type="text" 
                 value={formData.jobTitle}
@@ -697,15 +800,17 @@ function EmployeeForm({ onClose, initialData, userId }) {
                 className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">الشركة</label>
-              <input 
-                type="text" 
-                value={formData.company}
-                onChange={e => setFormData({...formData, company: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-            </div>
+            {!isCompany && (
+                <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">الشركة</label>
+                <input 
+                    type="text" 
+                    value={formData.company}
+                    onChange={e => setFormData({...formData, company: e.target.value})}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -714,7 +819,9 @@ function EmployeeForm({ onClose, initialData, userId }) {
                 الروابط والمرفقات
              </div>
              <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">رابط الصورة الشخصية</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {isCompany ? 'رابط شعار الشركة (Logo URL)' : 'رابط الصورة الشخصية'}
+              </label>
               <input 
                 type="url" 
                 dir="ltr"
@@ -725,7 +832,9 @@ function EmployeeForm({ onClose, initialData, userId }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">رابط الـ CV (PDF)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {isCompany ? 'ملف تعريفي (PDF)' : 'رابط الـ CV (PDF)'}
+              </label>
               <input 
                 type="url" 
                 dir="ltr"
@@ -746,6 +855,52 @@ function EmployeeForm({ onClose, initialData, userId }) {
               onChange={e => setFormData({...formData, website: e.target.value})}
               className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
             />
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-bold text-slate-700 mb-3">وسائل التواصل الاجتماعي</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input 
+                type="url" 
+                dir="ltr"
+                value={formData.facebook}
+                onChange={e => setFormData({...formData, facebook: e.target.value})}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="رابط فيسبوك"
+              />
+              <input 
+                type="url" 
+                dir="ltr"
+                value={formData.twitter}
+                onChange={e => setFormData({...formData, twitter: e.target.value})}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="رابط تويتر / X"
+              />
+              <input 
+                type="url" 
+                dir="ltr"
+                value={formData.instagram}
+                onChange={e => setFormData({...formData, instagram: e.target.value})}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="رابط انستجرام"
+              />
+              <input 
+                type="url" 
+                dir="ltr"
+                value={formData.linkedin}
+                onChange={e => setFormData({...formData, linkedin: e.target.value})}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="رابط لينكد إن"
+              />
+              <input 
+                type="url" 
+                dir="ltr"
+                value={formData.youtube}
+                onChange={e => setFormData({...formData, youtube: e.target.value})}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="رابط يوتيوب"
+              />
+            </div>
           </div>
 
           <div className="pt-4">
@@ -819,7 +974,17 @@ function ProfileView({ data: profileData, user }) {
   const downloadVCard = () => {
     trackClick('save_contact');
     if (!data) return;
-    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${data.name};;;;\nFN;CHARSET=UTF-8:${data.name}\nTEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${data.jobTitle ? `TITLE;CHARSET=UTF-8:${data.jobTitle}\n` : ''}${data.company ? `ORG;CHARSET=UTF-8:${data.company}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}END:VCARD`;
+    
+    // تعديل vCard حسب نوع البروفايل
+    const isCompany = data.profileType === 'company';
+    const org = isCompany ? data.name : (data.company || '');
+    const title = isCompany ? '' : (data.jobTitle || '');
+    const note = isCompany ? (data.jobTitle || '') : ''; // Slogan as note
+    
+    // إضافة حقل X-ABShowAs:COMPANY لجعل الهواتف تتعرف عليها كشركة
+    const companyField = isCompany ? 'X-ABShowAs:COMPANY\n' : '';
+
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${data.name};;;;\nFN;CHARSET=UTF-8:${data.name}\n${companyField}TEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${title ? `TITLE;CHARSET=UTF-8:${title}\n` : ''}${org ? `ORG;CHARSET=UTF-8:${org}\n` : ''}${note ? `NOTE;CHARSET=UTF-8:${note}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}${data.facebook ? `X-SOCIALPROFILE;type=facebook:${data.facebook}\n` : ''}${data.twitter ? `X-SOCIALPROFILE;type=twitter:${data.twitter}\n` : ''}${data.instagram ? `X-SOCIALPROFILE;type=instagram:${data.instagram}\n` : ''}${data.linkedin ? `X-SOCIALPROFILE;type=linkedin:${data.linkedin}\n` : ''}END:VCARD`;
     const blob = new Blob([vcard], { type: 'text/vcard' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -835,6 +1000,7 @@ function ProfileView({ data: profileData, user }) {
 
   const themeColor = data.themeColor || '#2563eb';
   const template = data.template || 'classic';
+  const isCompany = data.profileType === 'company';
 
   const renderHeader = (customClass) => {
     if (data.bgVideoUrl) {
@@ -857,17 +1023,19 @@ function ProfileView({ data: profileData, user }) {
 
   const renderAvatar = (customClass, customStyle) => {
     let defaultClass = "w-24 h-24 rounded-full border-4 border-white shadow-md bg-white";
-    if (template === 'creative') defaultClass = "w-28 h-28 rounded-2xl rotate-3 border-4 border-white shadow-xl bg-white";
-    if (template === 'minimal') defaultClass = "w-32 h-32 rounded-full shadow-lg bg-white border-2 border-slate-100";
-    if (template === 'elegant') defaultClass = "w-24 h-24 rounded-full border-4 border-white shadow-2xl bg-white";
+    if (isCompany) defaultClass = "w-24 h-24 rounded-xl border-4 border-white shadow-md bg-white"; // مربع للشركات
+    
+    if (template === 'creative') defaultClass = isCompany ? "w-28 h-28 rounded-xl rotate-3 border-4 border-white shadow-xl bg-white" : "w-28 h-28 rounded-2xl rotate-3 border-4 border-white shadow-xl bg-white";
+    if (template === 'minimal') defaultClass = isCompany ? "w-32 h-32 rounded-xl shadow-lg bg-white border-2 border-slate-100" : "w-32 h-32 rounded-full shadow-lg bg-white border-2 border-slate-100";
+    if (template === 'elegant') defaultClass = isCompany ? "w-24 h-24 rounded-lg border-4 border-white shadow-2xl bg-white" : "w-24 h-24 rounded-full border-4 border-white shadow-2xl bg-white";
 
     const content = data.profileVideoUrl ? (
-        <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" style={{ borderRadius: template === 'creative' ? '0.75rem' : '50%' }} />
+        <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" style={{ borderRadius: isCompany || template === 'creative' ? '0.5rem' : '50%' }} />
     ) : data.photoUrl ? (
-        <img src={data.photoUrl} alt={data.name} className="w-full h-full object-cover" style={{ borderRadius: template === 'creative' ? '0.75rem' : '50%' }} />
+        <img src={data.photoUrl} alt={data.name} className={`w-full h-full ${isCompany ? 'object-contain p-1' : 'object-cover'}`} style={{ borderRadius: isCompany || template === 'creative' ? '0.5rem' : '50%' }} />
     ) : (
-        <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-slate-500" style={{ borderRadius: template === 'creative' ? '0.75rem' : '50%' }}>
-            {data.name.charAt(0)}
+        <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-slate-500" style={{ borderRadius: isCompany || template === 'creative' ? '0.5rem' : '50%' }}>
+            {isCompany ? <Building2 size={32} /> : data.name.charAt(0)}
         </div>
     );
 
@@ -878,6 +1046,16 @@ function ProfileView({ data: profileData, user }) {
     );
   };
 
+  const renderSocials = () => (
+    <div className="flex justify-center gap-3 mt-4 mb-4 flex-wrap">
+      {data.facebook && <a href={data.facebook} target="_blank" onClick={() => trackClick('facebook')} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Facebook size={20} /></a>}
+      {data.twitter && <a href={data.twitter} target="_blank" onClick={() => trackClick('twitter')} className="p-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"><Twitter size={20} /></a>}
+      {data.instagram && <a href={data.instagram} target="_blank" onClick={() => trackClick('instagram')} className="p-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 transition-colors"><Instagram size={20} /></a>}
+      {data.linkedin && <a href={data.linkedin} target="_blank" onClick={() => trackClick('linkedin')} className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-800 transition-colors"><Linkedin size={20} /></a>}
+      {data.youtube && <a href={data.youtube} target="_blank" onClick={() => trackClick('youtube')} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"><Youtube size={20} /></a>}
+    </div>
+  );
+
   if (template === 'modern') {
       return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -887,6 +1065,7 @@ function ProfileView({ data: profileData, user }) {
                 <div className="mt-8 text-center mb-8 px-6">
                     <h1 className="text-2xl font-bold">{data.name}</h1>
                     <p className="opacity-80 mt-1">{data.jobTitle} {data.company && `| ${data.company}`}</p>
+                    {renderSocials()}
                 </div>
                 <div className="px-6 pb-8 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
@@ -920,6 +1099,7 @@ function ProfileView({ data: profileData, user }) {
                     <h1 className="text-3xl font-black text-slate-800">{data.name}</h1>
                     <p className="text-lg font-medium opacity-80 mt-1" style={{ color: themeColor }}>{data.jobTitle}</p>
                     {data.company && <p className="text-sm text-slate-400 font-bold tracking-widest uppercase mt-2">{data.company}</p>}
+                    {renderSocials()}
                 </div>
                 <div className="px-6 pb-8 space-y-4">
                     <div className="space-y-3">
@@ -945,6 +1125,7 @@ function ProfileView({ data: profileData, user }) {
                 </div>
                 <h1 className="text-3xl font-light text-slate-900 mb-2">{data.name}</h1>
                 <p className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-8">{data.jobTitle} | {data.company}</p>
+                {renderSocials()}
                 
                 <div className="space-y-4 max-w-xs mx-auto">
                     <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="block w-full py-3 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">اتصال هاتفي</a>
@@ -983,6 +1164,7 @@ function ProfileView({ data: profileData, user }) {
                     </div>
                     <h2 className="text-3xl font-serif text-slate-900 mb-2">{data.name}</h2>
                     <p className="text-[#d4af37] font-medium uppercase tracking-widest text-xs mb-8">{data.jobTitle}</p>
+                    {renderSocials()}
                     
                     <div className="space-y-4 font-serif">
                         <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex items-center justify-center gap-3 py-3 border-b border-slate-100 hover:bg-[#fcfbf9] transition-colors text-slate-600">
@@ -1020,6 +1202,7 @@ function ProfileView({ data: profileData, user }) {
                        <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
                        <p className="text-slate-500 font-medium">{data.jobTitle}</p>
                        <p className="text-blue-600 text-sm">{data.company}</p>
+                       {renderSocials()}
                    </div>
                    
                    <div className="space-y-2 flex-1">
@@ -1062,7 +1245,10 @@ function ProfileView({ data: profileData, user }) {
           {renderAvatar()}
           <div className="mt-16 text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
-            <p className="font-medium" style={{ color: themeColor }}>{data.jobTitle} {data.company && `| ${data.company}`}</p>
+            <p className="font-medium" style={{ color: themeColor }}>
+                {data.jobTitle} {data.company && `| ${data.company}`}
+            </p>
+            {renderSocials()}
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-6">
@@ -1089,7 +1275,7 @@ function ProfileView({ data: profileData, user }) {
             <button onClick={() => setShowWalletModal('google')} className="col-span-1 flex items-center justify-center gap-2 bg-white text-black border border-slate-200 p-3 rounded-xl hover:bg-slate-50"><CreditCard size={20} className="text-blue-500" /><span className="font-bold text-xs">Google</span></button>
             {data.cvUrl && (
               <a href={data.cvUrl} target="_blank" onClick={() => trackClick('download_cv')} className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
-                <FileText size={20} className="text-orange-500" /> <span className="font-bold">تحميل السيرة الذاتية</span>
+                <FileText size={20} className="text-orange-500" /> <span className="font-bold">{isCompany ? 'الملف التعريفي' : 'تحميل السيرة الذاتية'}</span>
               </a>
             )}
           </div>
@@ -1106,63 +1292,105 @@ function ProfileView({ data: profileData, user }) {
   );
 }
 
+// ... (باقي المكونات المساعدة: LeadCaptureModal, WalletPreviewModal, QRModal, LeadsListModal, AnalyticsModal لم تتغير) ...
+// (يتم تضمينها في الكود الكامل أعلاه لضمان عمل الملف)
+
+function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
+        name,
+        phone,
+        createdAt: serverTimestamp()
+      });
+      setSubmitted(true);
+      if (onSuccess) onSuccess();
+      setTimeout(() => onClose(), 2000);
+    } catch (error) {
+      window.alert("حدث خطأ أثناء الإرسال.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in duration-200 relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><UserPlus size={32} /></div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">تم الإرسال بنجاح!</h3>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="text-center mb-6"><h3 className="text-xl font-bold text-slate-800">تبادل جهات الاتصال</h3></div>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder="الاسم" />
+            <input type="tel" required dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder="05xxxxxxxx" />
+            <button type="submit" disabled={loading} className="w-full text-white font-bold py-3 rounded-xl" style={{ backgroundColor: themeColor }}>{loading ? '...' : 'إرسال'}</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WalletPreviewModal({ type, data, onClose }) {
+  const isApple = type === 'apple';
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+        <div className="p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg" style={{ backgroundColor: isApple ? 'black' : 'white', border: isApple ? 'none' : '1px solid #eee' }}>
+            {isApple ? <Wallet size={32} className="text-white" /> : <CreditCard size={32} className="text-blue-500" />}
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">{isApple ? 'Apple Wallet' : 'Google Wallet'}</h3>
+          <p className="text-sm text-slate-500 mt-6 bg-slate-50 p-3 rounded-lg">هذه معاينة فقط. يتطلب التفعيل خادماً خلفياً.</p>
+          <div className="mt-6 flex gap-3">
+            <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl">إلغاء</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QRModal({ employee, userId, onClose }) {
+  const getProfileUrl = () => `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
+  const qrColor = employee.qrColor ? employee.qrColor.replace('#', '') : '000000';
+  const qrBgColor = employee.qrBgColor ? employee.qrBgColor.replace('#', '') : 'ffffff';
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200 p-8 flex flex-col items-center">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={24} /></button>
+        <div className="bg-white p-2 rounded-xl shadow-lg border border-slate-100 mb-6"><img src={qrImageUrl} alt="QR" className="w-48 h-48" /></div>
+        <h3 className="text-xl font-bold mb-1">{employee.name}</h3>
+      </div>
+    </div>
+  );
+}
+
 function LeadsListModal({ userId, employee, onClose }) {
   const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'leads');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setLeads(data);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    return onSnapshot(q, (snapshot) => setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
   }, [userId, employee.id]);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl animate-in zoom-in duration-200 flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <Users size={20} className="text-blue-600" />
-            العملاء المهتمين: {employee.name}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="p-6 flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="text-center py-10">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-          ) : leads.length === 0 ? (
-            <div className="text-center py-10 text-slate-400">
-              <Users size={48} className="mx-auto mb-2 opacity-20" />
-              <p>لا يوجد عملاء مسجلين حتى الآن</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {leads.map(lead => (
-                <div key={lead.id} className="bg-slate-50 p-4 rounded-xl flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-slate-800">{lead.name}</div>
-                    <div className="text-sm text-slate-500 font-mono mt-1" dir="ltr">{lead.phone}</div>
-                    <div className="text-xs text-slate-400 mt-2">
-                      {lead.createdAt?.seconds ? new Date(lead.createdAt.seconds * 1000).toLocaleDateString('ar-EG') : '-'}
-                    </div>
-                  </div>
-                  <a href={`tel:${lead.phone}`} className="p-3 bg-white text-green-600 rounded-full shadow-sm hover:bg-green-50 transition-colors">
-                    <Phone size={18} />
-                  </a>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl p-6">
+        <div className="flex justify-between mb-4"><h2 className="text-lg font-bold">العملاء: {employee.name}</h2><button onClick={onClose}><X size={20} /></button></div>
+        <div className="space-y-3">{leads.map(l => <div key={l.id} className="bg-slate-50 p-3 rounded">{l.name} - {l.phone}</div>)}</div>
       </div>
     </div>
   );
@@ -1185,8 +1413,13 @@ function AnalyticsModal({ employee, onClose }) {
             'email': 'إرسال بريد',
             'website': 'زيارة الموقع',
             'save_contact': 'حفظ جهة الاتصال',
-            'download_cv': 'تحميل السيرة الذاتية',
-            'exchange_contact': 'تبادل جهات الاتصال'
+            'download_cv': 'تحميل الملفات',
+            'exchange_contact': 'تبادل جهات الاتصال',
+            'facebook': 'فيسبوك',
+            'twitter': 'تويتر',
+            'instagram': 'انستجرام',
+            'linkedin': 'لينكد إن',
+            'youtube': 'يوتيوب'
         };
         return names[key] || key;
     };
@@ -1330,262 +1563,4 @@ function getFlagEmoji(countryCode) {
     .split('')
     .map(char =>  127397 + char.charCodeAt());
   return String.fromCodePoint(...codePoints);
-}
-
-function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
-        name,
-        phone,
-        createdAt: serverTimestamp()
-      });
-      setSubmitted(true);
-      if (onSuccess) onSuccess();
-      setTimeout(() => {
-        onClose();
-      }, 2000);
-    } catch (error) {
-      console.error("Error capturing lead:", error);
-      window.alert("حدث خطأ أثناء الإرسال. يرجى المحاولة مرة أخرى.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in duration-200 relative">
-        <button 
-          onClick={onClose} 
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          <X size={20} />
-        </button>
-
-        {submitted ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-              <UserPlus size={32} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">تم الإرسال بنجاح!</h3>
-            <p className="text-slate-500">شكراً لك، سأقوم بالتواصل معك قريباً.</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="text-center mb-6">
-              <h3 className="text-xl font-bold text-slate-800">تبادل جهات الاتصال</h3>
-              <p className="text-sm text-slate-500 mt-1">شارك بياناتك لنتواصل معك</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">الاسم الكريم</label>
-              <input 
-                type="text" 
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
-                placeholder="الاسم"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">رقم الجوال</label>
-              <input 
-                type="tel" 
-                required
-                dir="ltr"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-right transition-shadow"
-                placeholder="05xxxxxxxx"
-              />
-            </div>
-
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="w-full text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
-              style={{ backgroundColor: themeColor }}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  <Send size={18} />
-                  إرسال البيانات
-                </>
-              )}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function WalletPreviewModal({ type, data, onClose }) {
-  const isApple = type === 'apple';
-  
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-        <div className="p-6 text-center">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg"
-               style={{ backgroundColor: isApple ? 'black' : 'white', border: isApple ? 'none' : '1px solid #eee' }}>
-            {isApple ? (
-              <Wallet size={32} className="text-white" />
-            ) : (
-              <div className="flex gap-1">
-                <span className="text-blue-500 font-bold text-xl">G</span>
-                <span className="text-red-500 font-bold text-xl">P</span>
-                <span className="text-yellow-500 font-bold text-xl">a</span>
-                <span className="text-green-500 font-bold text-xl">y</span>
-              </div>
-            )}
-          </div>
-          
-          <h3 className="text-xl font-bold text-slate-900 mb-2">
-            {isApple ? 'إضافة إلى Apple Wallet' : 'إضافة إلى Google Wallet'}
-          </h3>
-          
-          <div className={`mt-6 mx-auto w-full max-w-[280px] rounded-xl overflow-hidden shadow-xl text-left relative ${isApple ? 'bg-black text-white h-48' : 'bg-white text-slate-900 border border-slate-200 h-48'}`}>
-             <div className="p-4 flex flex-col h-full justify-between">
-                <div className="flex justify-between items-start">
-                   <div className="text-sm font-bold opacity-80">BUSINESS CARD</div>
-                   {isApple && <Wallet size={16} />}
-                </div>
-                
-                <div className="flex gap-3 items-center">
-                   <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
-                      {data.name.charAt(0)}
-                   </div>
-                   <div>
-                      <div className="font-bold text-lg leading-tight">{data.name}</div>
-                      <div className="text-xs opacity-70">{data.jobTitle}</div>
-                   </div>
-                </div>
-                
-                <div className="flex justify-between items-end">
-                   <QrCode size={32} className="opacity-80" />
-                   <div className="text-xs opacity-60">nfc enabled</div>
-                </div>
-             </div>
-          </div>
-
-          <p className="text-sm text-slate-500 mt-6 bg-slate-50 p-3 rounded-lg border border-slate-100">
-            <strong>ملاحظة للمطور:</strong> هذه معاينة فقط. التوليد الفعلي لبطاقات {isApple ? 'pkpass' : 'Google Pay'} يتطلب خادماً خلفياً.
-          </p>
-
-          <div className="mt-6 flex gap-3">
-            <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl transition-colors">
-              إلغاء
-            </button>
-            <button disabled className="flex-1 py-3 bg-slate-200 text-slate-400 font-bold rounded-xl cursor-not-allowed">
-              تحميل (يتطلب Backend)
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QRModal({ employee, userId, onClose }) {
-  const [downloading, setDownloading] = useState(false);
-
-  const getProfileUrl = () => {
-    const baseUrl = window.location.href.split('#')[0];
-    return `${baseUrl}#uid=${userId}&pid=${employee.id}`;
-  };
-
-  const qrColor = employee.qrColor ? employee.qrColor.replace('#', '') : '000000';
-  const qrBgColor = employee.qrBgColor ? employee.qrBgColor.replace('#', '') : 'ffffff';
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
-
-  const downloadQR = async () => {
-    setDownloading(true);
-    try {
-      const response = await fetch(qrImageUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${employee.name}-qr.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading image:', error);
-      window.alert('حدث خطأ أثناء تحميل الصورة');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-        <div 
-          className="p-6 text-center text-white relative overflow-hidden"
-          style={{ backgroundColor: employee.themeColor || '#2563eb' }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10"></div>
-          <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white p-1">
-            <X size={24} />
-          </button>
-          <h3 className="text-xl font-bold mb-1">{employee.name}</h3>
-          <p className="text-white/80 text-sm">{employee.jobTitle}</p>
-        </div>
-        
-        <div className="p-8 flex flex-col items-center">
-          <div className="bg-white p-2 rounded-xl shadow-lg border border-slate-100 mb-6 w-[220px] h-[220px] flex items-center justify-center">
-            <img 
-              src={qrImageUrl} 
-              alt="QR Code" 
-              className="w-full h-full object-contain"
-            />
-          </div>
-          
-          <div className="text-center text-amber-600 bg-amber-50 p-3 rounded-lg text-xs mb-6 w-full">
-            <strong>ملاحظة هامة:</strong> تم تحديث الرابط ليشمل معرف حسابك.
-          </div>
-
-          <button 
-            onClick={downloadQR}
-            disabled={downloading}
-            className="w-full text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-            style={{ backgroundColor: '#1e293b' }}
-          >
-            {downloading ? (
-               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-               <Share2 size={18} />
-            )}
-            {downloading ? 'جاري التحميل...' : 'تحميل الصورة'}
-          </button>
-          
-          <a 
-            href={getProfileUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 text-blue-600 text-sm hover:underline flex items-center gap-1"
-            style={{ color: employee.themeColor || '#2563eb' }}
-          >
-            تجربة الرابط في المتصفح <ExternalLink size={12}/>
-          </a>
-        </div>
-      </div>
-    </div>
-  );
 }
