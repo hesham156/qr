@@ -242,7 +242,7 @@ function Dashboard({ user, onLogout }) {
   const [employees, setEmployees] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [analyticsEmployee, setAnalyticsEmployee] = useState(null); // للمودال الجديد
+  const [analyticsEmployee, setAnalyticsEmployee] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
 
@@ -393,7 +393,6 @@ function Dashboard({ user, onLogout }) {
 // --- بطاقة الموظف ---
 function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics }) {
   const themeColor = employee.themeColor || '#2563eb';
-  // قراءة الإحصائيات (افتراضي 0)
   const views = employee.stats?.views || 0;
 
   return (
@@ -468,11 +467,9 @@ function AnalyticsModal({ employee, onClose }) {
     const clicks = stats.clicks || {};
     const countries = stats.countries || {};
 
-    // تحويل الكائنات إلى مصفوفات للفرز والعرض
     const sortedClicks = Object.entries(clicks).sort(([,a], [,b]) => b - a);
     const sortedCountries = Object.entries(countries).sort(([,a], [,b]) => b - a);
 
-    // دالة لترجمة أسماء الأزرار
     const getActionName = (key) => {
         const names = {
             'call': 'اتصال هاتفي',
@@ -499,7 +496,6 @@ function AnalyticsModal({ employee, onClose }) {
                 </div>
 
                 <div className="p-6 space-y-6">
-                    {/* بطاقات الملخص */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-blue-50 p-4 rounded-xl text-center">
                             <div className="text-blue-500 mb-1 flex justify-center"><Activity size={24} /></div>
@@ -513,7 +509,6 @@ function AnalyticsModal({ employee, onClose }) {
                         </div>
                     </div>
 
-                    {/* تفاصيل النقرات */}
                     <div>
                         <h3 className="text-sm font-bold text-slate-700 mb-3 border-r-4 border-blue-500 pr-2">تفاعل الأزرار</h3>
                         <div className="space-y-3">
@@ -528,7 +523,6 @@ function AnalyticsModal({ employee, onClose }) {
                         </div>
                     </div>
 
-                    {/* الدول */}
                     <div>
                         <h3 className="text-sm font-bold text-slate-700 mb-3 border-r-4 border-green-500 pr-2">أهم الدول</h3>
                         <div className="space-y-2">
@@ -556,7 +550,6 @@ function AnalyticsModal({ employee, onClose }) {
     );
 }
 
-// دالة مساعدة للحصول على علم الدولة من الكود
 function getFlagEmoji(countryCode) {
   if (!countryCode || countryCode === 'Unknown') return '🌍';
   const codePoints = countryCode
@@ -581,7 +574,7 @@ function EmployeeForm({ onClose, initialData, userId }) {
     themeColor: '#2563eb',
     qrColor: '#000000',
     qrBgColor: '#ffffff',
-    stats: { views: 0, clicks: {}, countries: {} } // تهيئة الإحصائيات
+    stats: { views: 0, clicks: {}, countries: {} }
   });
   const [loading, setLoading] = useState(false);
 
@@ -593,7 +586,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
         themeColor: initialData.themeColor || '#2563eb',
         qrColor: initialData.qrColor || '#000000',
         qrBgColor: initialData.qrBgColor || '#ffffff',
-        // الحفاظ على الإحصائيات الموجودة
         stats: initialData.stats || { views: 0, clicks: {}, countries: {} }
       }));
     }
@@ -638,7 +630,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
-          {/* قسم الألوان (السمة) */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-white rounded-lg shadow-sm text-slate-600">
@@ -659,7 +650,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
             </div>
           </div>
 
-          {/* قسم تخصيص الـ QR Code */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
             <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-2">
               <Grid size={18} className="text-slate-600" />
@@ -759,7 +749,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
             </div>
           </div>
 
-          {/* حقول الروابط والمرفقات */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
              <div className="col-span-2 text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
                 <ImageIcon size={14}/>
@@ -913,13 +902,13 @@ function ProfileView({ data: profileData }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const isLogged = useRef(false); // لمنع تكرار تسجيل الزيارة في نفس الجلسة (React strict mode)
+  const isLogged = useRef(false); // لمنع تكرار تسجيل الزيارة في نفس الجلسة
 
   // دالة لتسجيل النقرات (Clicks Analytics)
   const trackClick = async (action) => {
     try {
         const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        // تحديث إحصائيات النقرات باستخدام merge لتجنب حذف البيانات الأخرى
+        // نستخدم try-catch داخلي لتجنب إظهار أخطاء الصلاحيات للمستخدم
         await setDoc(docRef, {
             stats: {
                 clicks: {
@@ -928,7 +917,13 @@ function ProfileView({ data: profileData }) {
             }
         }, { merge: true });
     } catch (e) {
-        console.error("Error tracking click:", e);
+        // نتجاهل أخطاء الصلاحيات هنا حتى لا نعطل تجربة المستخدم
+        // لتفعيل التحليلات، يجب تعديل Firestore Rules
+        if(e.code !== 'permission-denied') {
+             console.error("Error tracking click:", e);
+        } else {
+             console.warn("Analytics update failed: Check Firestore Rules to allow public updates to 'stats' field.");
+        }
     }
   };
 
@@ -945,13 +940,12 @@ function ProfileView({ data: profileData }) {
           if (!isLogged.current) {
             isLogged.current = true;
             
-            // 1. زيادة عداد الزيارات
-            // 2. محاولة تحديد الدولة (اختياري)
+            // محاولة تسجيل البيانات
             try {
-                // نستخدم خدمة مجانية لتحديد الدولة
-                const res = await fetch('https://ipapi.co/json/');
+                // استخدام خدمة ipwho.is بدلاً من ipapi.co لتجنب مشاكل CORS
+                const res = await fetch('https://ipwho.is/');
                 const geo = await res.json();
-                const countryCode = geo.country_code || 'Unknown';
+                const countryCode = geo.success ? geo.country_code : 'Unknown';
 
                 await setDoc(docRef, {
                     stats: {
@@ -962,11 +956,11 @@ function ProfileView({ data: profileData }) {
                     }
                 }, { merge: true });
 
-            } catch (geoError) {
-                // في حال فشل تحديد الموقع، نسجل الزيارة فقط
-                await setDoc(docRef, {
-                    stats: { views: increment(1) }
-                }, { merge: true });
+            } catch (analyticsError) {
+                // إذا فشلت عملية الكتابة (بسبب الصلاحيات أو غيرها)، نتجاهل الخطأ ونكمل العرض
+                if(analyticsError.code !== 'permission-denied') {
+                    console.error("Analytics Error:", analyticsError);
+                }
             }
           }
 
