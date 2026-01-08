@@ -269,12 +269,14 @@ function Dashboard({ user, onLogout }) {
   }, [user]);
 
   const handleDelete = async (id) => {
-    if (confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
+    // FIX: Use window.confirm explicitly
+    if (window.confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', id));
       } catch (e) {
         console.error("Error deleting:", e);
-        alert("حدث خطأ أثناء الحذف.");
+        // FIX: Use window.alert explicitly
+        window.alert("حدث خطأ أثناء الحذف.");
       }
     }
   };
@@ -500,7 +502,8 @@ function EmployeeForm({ onClose, initialData, userId }) {
       onClose();
     } catch (error) {
       console.error("Error saving:", error);
-      alert("حدث خطأ أثناء الحفظ");
+      // FIX: Use window.alert
+      window.alert("حدث خطأ أثناء الحفظ");
     } finally {
       setLoading(false);
     }
@@ -728,7 +731,8 @@ function QRModal({ employee, userId, onClose }) {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading image:', error);
-      alert('حدث خطأ أثناء تحميل الصورة');
+      // FIX: Use window.alert
+      window.alert('حدث خطأ أثناء تحميل الصورة');
     } finally {
       setDownloading(false);
     }
