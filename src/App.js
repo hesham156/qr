@@ -1331,3 +1331,261 @@ function getFlagEmoji(countryCode) {
     .map(char =>  127397 + char.charCodeAt());
   return String.fromCodePoint(...codePoints);
 }
+
+function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
+        name,
+        phone,
+        createdAt: serverTimestamp()
+      });
+      setSubmitted(true);
+      if (onSuccess) onSuccess();
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (error) {
+      console.error("Error capturing lead:", error);
+      window.alert("حدث خطأ أثناء الإرسال. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in duration-200 relative">
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <X size={20} />
+        </button>
+
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+              <UserPlus size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">تم الإرسال بنجاح!</h3>
+            <p className="text-slate-500">شكراً لك، سأقوم بالتواصل معك قريباً.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-bold text-slate-800">تبادل جهات الاتصال</h3>
+              <p className="text-sm text-slate-500 mt-1">شارك بياناتك لنتواصل معك</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">الاسم الكريم</label>
+              <input 
+                type="text" 
+                required
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                placeholder="الاسم"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">رقم الجوال</label>
+              <input 
+                type="tel" 
+                required
+                dir="ltr"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-right transition-shadow"
+                placeholder="05xxxxxxxx"
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+              style={{ backgroundColor: themeColor }}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <Send size={18} />
+                  إرسال البيانات
+                </>
+              )}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WalletPreviewModal({ type, data, onClose }) {
+  const isApple = type === 'apple';
+  
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+        <div className="p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg"
+               style={{ backgroundColor: isApple ? 'black' : 'white', border: isApple ? 'none' : '1px solid #eee' }}>
+            {isApple ? (
+              <Wallet size={32} className="text-white" />
+            ) : (
+              <div className="flex gap-1">
+                <span className="text-blue-500 font-bold text-xl">G</span>
+                <span className="text-red-500 font-bold text-xl">P</span>
+                <span className="text-yellow-500 font-bold text-xl">a</span>
+                <span className="text-green-500 font-bold text-xl">y</span>
+              </div>
+            )}
+          </div>
+          
+          <h3 className="text-xl font-bold text-slate-900 mb-2">
+            {isApple ? 'إضافة إلى Apple Wallet' : 'إضافة إلى Google Wallet'}
+          </h3>
+          
+          <div className={`mt-6 mx-auto w-full max-w-[280px] rounded-xl overflow-hidden shadow-xl text-left relative ${isApple ? 'bg-black text-white h-48' : 'bg-white text-slate-900 border border-slate-200 h-48'}`}>
+             <div className="p-4 flex flex-col h-full justify-between">
+                <div className="flex justify-between items-start">
+                   <div className="text-sm font-bold opacity-80">BUSINESS CARD</div>
+                   {isApple && <Wallet size={16} />}
+                </div>
+                
+                <div className="flex gap-3 items-center">
+                   <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
+                      {data.name.charAt(0)}
+                   </div>
+                   <div>
+                      <div className="font-bold text-lg leading-tight">{data.name}</div>
+                      <div className="text-xs opacity-70">{data.jobTitle}</div>
+                   </div>
+                </div>
+                
+                <div className="flex justify-between items-end">
+                   <QrCode size={32} className="opacity-80" />
+                   <div className="text-xs opacity-60">nfc enabled</div>
+                </div>
+             </div>
+          </div>
+
+          <p className="text-sm text-slate-500 mt-6 bg-slate-50 p-3 rounded-lg border border-slate-100">
+            <strong>ملاحظة للمطور:</strong> هذه معاينة فقط. التوليد الفعلي لبطاقات {isApple ? 'pkpass' : 'Google Pay'} يتطلب خادماً خلفياً.
+          </p>
+
+          <div className="mt-6 flex gap-3">
+            <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl transition-colors">
+              إلغاء
+            </button>
+            <button disabled className="flex-1 py-3 bg-slate-200 text-slate-400 font-bold rounded-xl cursor-not-allowed">
+              تحميل (يتطلب Backend)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QRModal({ employee, userId, onClose }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const getProfileUrl = () => {
+    const baseUrl = window.location.href.split('#')[0];
+    return `${baseUrl}#uid=${userId}&pid=${employee.id}`;
+  };
+
+  const qrColor = employee.qrColor ? employee.qrColor.replace('#', '') : '000000';
+  const qrBgColor = employee.qrBgColor ? employee.qrBgColor.replace('#', '') : 'ffffff';
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
+
+  const downloadQR = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch(qrImageUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${employee.name}-qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      window.alert('حدث خطأ أثناء تحميل الصورة');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+        <div 
+          className="p-6 text-center text-white relative overflow-hidden"
+          style={{ backgroundColor: employee.themeColor || '#2563eb' }}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10"></div>
+          <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white p-1">
+            <X size={24} />
+          </button>
+          <h3 className="text-xl font-bold mb-1">{employee.name}</h3>
+          <p className="text-white/80 text-sm">{employee.jobTitle}</p>
+        </div>
+        
+        <div className="p-8 flex flex-col items-center">
+          <div className="bg-white p-2 rounded-xl shadow-lg border border-slate-100 mb-6 w-[220px] h-[220px] flex items-center justify-center">
+            <img 
+              src={qrImageUrl} 
+              alt="QR Code" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+          
+          <div className="text-center text-amber-600 bg-amber-50 p-3 rounded-lg text-xs mb-6 w-full">
+            <strong>ملاحظة هامة:</strong> تم تحديث الرابط ليشمل معرف حسابك.
+          </div>
+
+          <button 
+            onClick={downloadQR}
+            disabled={downloading}
+            className="w-full text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            style={{ backgroundColor: '#1e293b' }}
+          >
+            {downloading ? (
+               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+               <Share2 size={18} />
+            )}
+            {downloading ? 'جاري التحميل...' : 'تحميل الصورة'}
+          </button>
+          
+          <a 
+            href={getProfileUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 text-blue-600 text-sm hover:underline flex items-center gap-1"
+            style={{ color: employee.themeColor || '#2563eb' }}
+          >
+            تجربة الرابط في المتصفح <ExternalLink size={12}/>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
