@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid } from 'lucide-react';
+import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick } from 'lucide-react';
 
 // --- تهيئة Firebase ---
 let firebaseConfig;
@@ -42,14 +42,12 @@ export default function App() {
   const [viewMode, setViewMode] = useState('loading'); // loading, login, dashboard, profile
   const [profileData, setProfileData] = useState({ id: null, adminId: null });
   
-  // دالة للتحقق من الهاش في الرابط وتحديث العرض
   const checkRoute = (currentUser) => {
     const hashString = window.location.hash.substring(1); // إزالة #
     const params = new URLSearchParams(hashString);
     const pid = params.get('pid');
     const uid = params.get('uid');
     
-    // 1. حالة عرض البروفايل (QR Code)
     if (pid && uid) {
       setProfileData({ id: pid, adminId: uid });
       setViewMode('profile');
@@ -59,7 +57,6 @@ export default function App() {
       return;
     }
 
-    // 2. حالة لوحة التحكم (Dashboard)
     if (currentUser && !currentUser.isAnonymous) {
       setViewMode('dashboard');
     } else {
@@ -245,6 +242,7 @@ function Dashboard({ user, onLogout }) {
   const [employees, setEmployees] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [analyticsEmployee, setAnalyticsEmployee] = useState(null); // للمودال الجديد
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
 
@@ -269,13 +267,11 @@ function Dashboard({ user, onLogout }) {
   }, [user]);
 
   const handleDelete = async (id) => {
-    // FIX: Use window.confirm explicitly
     if (window.confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', id));
       } catch (e) {
         console.error("Error deleting:", e);
-        // FIX: Use window.alert explicitly
         window.alert("حدث خطأ أثناء الحذف.");
       }
     }
@@ -360,6 +356,7 @@ function Dashboard({ user, onLogout }) {
                 onDelete={() => handleDelete(emp.id)}
                 onEdit={() => handleEdit(emp)}
                 onShowQR={() => setSelectedEmployee(emp)}
+                onShowAnalytics={() => setAnalyticsEmployee(emp)}
               />
             ))}
           </div>
@@ -382,20 +379,27 @@ function Dashboard({ user, onLogout }) {
           onClose={() => setSelectedEmployee(null)} 
         />
       )}
+
+      {analyticsEmployee && (
+        <AnalyticsModal 
+          employee={analyticsEmployee}
+          onClose={() => setAnalyticsEmployee(null)}
+        />
+      )}
     </div>
   );
 }
 
 // --- بطاقة الموظف ---
-function EmployeeCard({ employee, onDelete, onEdit, onShowQR }) {
-  // استخدام لون السمة إذا وجد
+function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics }) {
   const themeColor = employee.themeColor || '#2563eb';
+  // قراءة الإحصائيات (افتراضي 0)
+  const views = employee.stats?.views || 0;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 relative group">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          {/* عرض الصورة إذا وجدت */}
           {employee.photoUrl ? (
             <img 
               src={employee.photoUrl} 
@@ -426,29 +430,140 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR }) {
         </div>
       </div>
 
-      <div className="space-y-2 text-sm text-slate-600 mb-6">
-        <div className="flex items-center gap-2">
-          <Phone size={14} className="text-slate-400" />
-          <span dir="ltr" className="text-right">{employee.phone}</span>
+      <div className="flex items-center gap-4 mb-4 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg">
+        <div className="flex items-center gap-1">
+            <Activity size={14} className="text-blue-500" />
+            <span>{views} زيارة</span>
         </div>
-        {employee.email && (
-          <div className="flex items-center gap-2">
-            <Mail size={14} className="text-slate-400" />
-            <span className="truncate">{employee.email}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+            <MousePointerClick size={14} className="text-orange-500" />
+            <span>{Object.values(employee.stats?.clicks || {}).reduce((a, b) => a + b, 0)} نقرة</span>
+        </div>
       </div>
 
-      <button 
-        onClick={onShowQR}
-        className="w-full text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors opacity-90 hover:opacity-100"
-        style={{ backgroundColor: themeColor }}
-      >
-        <QrCode size={16} />
-        عرض الـ QR Code
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button 
+            onClick={onShowAnalytics}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+            <BarChart3 size={16} />
+            الإحصائيات
+        </button>
+        <button 
+            onClick={onShowQR}
+            className="text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors opacity-90 hover:opacity-100"
+            style={{ backgroundColor: themeColor }}
+        >
+            <QrCode size={16} />
+            الرمز
+        </button>
+      </div>
     </div>
   );
+}
+
+// --- نافذة الإحصائيات (جديد) ---
+function AnalyticsModal({ employee, onClose }) {
+    const stats = employee.stats || { views: 0, clicks: {}, countries: {} };
+    const clicks = stats.clicks || {};
+    const countries = stats.countries || {};
+
+    // تحويل الكائنات إلى مصفوفات للفرز والعرض
+    const sortedClicks = Object.entries(clicks).sort(([,a], [,b]) => b - a);
+    const sortedCountries = Object.entries(countries).sort(([,a], [,b]) => b - a);
+
+    // دالة لترجمة أسماء الأزرار
+    const getActionName = (key) => {
+        const names = {
+            'call': 'اتصال هاتفي',
+            'whatsapp': 'واتساب',
+            'email': 'إرسال بريد',
+            'website': 'زيارة الموقع',
+            'save_contact': 'حفظ جهة الاتصال',
+            'download_cv': 'تحميل السيرة الذاتية'
+        };
+        return names[key] || key;
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                    <h2 className="text-lg font-bold flex items-center gap-2">
+                        <BarChart3 size={20} className="text-blue-600" />
+                        إحصائيات: {employee.name}
+                    </h2>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    {/* بطاقات الملخص */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-blue-50 p-4 rounded-xl text-center">
+                            <div className="text-blue-500 mb-1 flex justify-center"><Activity size={24} /></div>
+                            <div className="text-2xl font-bold text-slate-800">{stats.views}</div>
+                            <div className="text-xs text-slate-500">إجمالي الزيارات</div>
+                        </div>
+                        <div className="bg-orange-50 p-4 rounded-xl text-center">
+                            <div className="text-orange-500 mb-1 flex justify-center"><MousePointerClick size={24} /></div>
+                            <div className="text-2xl font-bold text-slate-800">{Object.values(clicks).reduce((a, b) => a + b, 0)}</div>
+                            <div className="text-xs text-slate-500">إجمالي النقرات</div>
+                        </div>
+                    </div>
+
+                    {/* تفاصيل النقرات */}
+                    <div>
+                        <h3 className="text-sm font-bold text-slate-700 mb-3 border-r-4 border-blue-500 pr-2">تفاعل الأزرار</h3>
+                        <div className="space-y-3">
+                            {sortedClicks.length > 0 ? sortedClicks.map(([action, count]) => (
+                                <div key={action} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg">
+                                    <span className="text-sm font-medium text-slate-700">{getActionName(action)}</span>
+                                    <span className="bg-white px-2 py-1 rounded text-xs font-bold shadow-sm border border-slate-100">{count}</span>
+                                </div>
+                            )) : (
+                                <p className="text-sm text-slate-400 text-center py-2">لا توجد نقرات مسجلة بعد</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* الدول */}
+                    <div>
+                        <h3 className="text-sm font-bold text-slate-700 mb-3 border-r-4 border-green-500 pr-2">أهم الدول</h3>
+                        <div className="space-y-2">
+                            {sortedCountries.length > 0 ? sortedCountries.map(([code, count]) => (
+                                <div key={code} className="flex items-center gap-3">
+                                    <div className="w-8 text-center text-lg">{getFlagEmoji(code)}</div>
+                                    <div className="flex-1">
+                                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-green-500 rounded-full" 
+                                                style={{ width: `${(count / stats.views) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs font-bold w-8 text-left">{count}</div>
+                                </div>
+                            )) : (
+                                <p className="text-sm text-slate-400 text-center py-2">لا توجد بيانات جغرافية بعد</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// دالة مساعدة للحصول على علم الدولة من الكود
+function getFlagEmoji(countryCode) {
+  if (!countryCode || countryCode === 'Unknown') return '🌍';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char =>  127397 + char.charCodeAt());
+  return String.fromCodePoint(...codePoints);
 }
 
 // --- نموذج إضافة/تعديل موظف ---
@@ -463,9 +578,10 @@ function EmployeeForm({ onClose, initialData, userId }) {
     whatsapp: '',
     photoUrl: '', 
     cvUrl: '',
-    themeColor: '#2563eb', // اللون الافتراضي (أزرق)
-    qrColor: '#000000',    // لون الـ QR الافتراضي (أسود)
-    qrBgColor: '#ffffff'   // لون خلفية الـ QR الافتراضي (أبيض)
+    themeColor: '#2563eb',
+    qrColor: '#000000',
+    qrBgColor: '#ffffff',
+    stats: { views: 0, clicks: {}, countries: {} } // تهيئة الإحصائيات
   });
   const [loading, setLoading] = useState(false);
 
@@ -476,7 +592,9 @@ function EmployeeForm({ onClose, initialData, userId }) {
         ...initialData,
         themeColor: initialData.themeColor || '#2563eb',
         qrColor: initialData.qrColor || '#000000',
-        qrBgColor: initialData.qrBgColor || '#ffffff'
+        qrBgColor: initialData.qrBgColor || '#ffffff',
+        // الحفاظ على الإحصائيات الموجودة
+        stats: initialData.stats || { views: 0, clicks: {}, countries: {} }
       }));
     }
   }, [initialData]);
@@ -502,7 +620,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
       onClose();
     } catch (error) {
       console.error("Error saving:", error);
-      // FIX: Use window.alert
       window.alert("حدث خطأ أثناء الحفظ");
     } finally {
       setLoading(false);
@@ -542,7 +659,7 @@ function EmployeeForm({ onClose, initialData, userId }) {
             </div>
           </div>
 
-          {/* قسم تخصيص الـ QR Code - جديد */}
+          {/* قسم تخصيص الـ QR Code */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
             <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-2">
               <Grid size={18} className="text-slate-600" />
@@ -708,11 +825,8 @@ function QRModal({ employee, userId, onClose }) {
     return `${baseUrl}#uid=${userId}&pid=${employee.id}`;
   };
 
-  // استخراج الألوان وتنظيفها (إزالة #)
   const qrColor = employee.qrColor ? employee.qrColor.replace('#', '') : '000000';
   const qrBgColor = employee.qrBgColor ? employee.qrBgColor.replace('#', '') : 'ffffff';
-
-  // بناء الرابط مع الألوان المخصصة
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
 
   const downloadQR = async () => {
@@ -731,7 +845,6 @@ function QRModal({ employee, userId, onClose }) {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading image:', error);
-      // FIX: Use window.alert
       window.alert('حدث خطأ أثناء تحميل الصورة');
     } finally {
       setDownloading(false);
@@ -800,6 +913,24 @@ function ProfileView({ data: profileData }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const isLogged = useRef(false); // لمنع تكرار تسجيل الزيارة في نفس الجلسة (React strict mode)
+
+  // دالة لتسجيل النقرات (Clicks Analytics)
+  const trackClick = async (action) => {
+    try {
+        const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
+        // تحديث إحصائيات النقرات باستخدام merge لتجنب حذف البيانات الأخرى
+        await setDoc(docRef, {
+            stats: {
+                clicks: {
+                    [action]: increment(1)
+                }
+            }
+        }, { merge: true });
+    } catch (e) {
+        console.error("Error tracking click:", e);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -809,6 +940,36 @@ function ProfileView({ data: profileData }) {
         
         if (docSnap.exists()) {
           setData(docSnap.data());
+          
+          // --- تسجيل الزيارة والموقع (Analytics) ---
+          if (!isLogged.current) {
+            isLogged.current = true;
+            
+            // 1. زيادة عداد الزيارات
+            // 2. محاولة تحديد الدولة (اختياري)
+            try {
+                // نستخدم خدمة مجانية لتحديد الدولة
+                const res = await fetch('https://ipapi.co/json/');
+                const geo = await res.json();
+                const countryCode = geo.country_code || 'Unknown';
+
+                await setDoc(docRef, {
+                    stats: {
+                        views: increment(1),
+                        countries: {
+                            [countryCode]: increment(1)
+                        }
+                    }
+                }, { merge: true });
+
+            } catch (geoError) {
+                // في حال فشل تحديد الموقع، نسجل الزيارة فقط
+                await setDoc(docRef, {
+                    stats: { views: increment(1) }
+                }, { merge: true });
+            }
+          }
+
         } else {
           setError('لم يتم العثور على البطاقة');
         }
@@ -824,6 +985,7 @@ function ProfileView({ data: profileData }) {
   }, [profileData]);
 
   const downloadVCard = () => {
+    trackClick('save_contact');
     if (!data) return;
     
     const vcard = `BEGIN:VCARD
@@ -897,13 +1059,23 @@ END:VCARD`;
 
           {/* Action Buttons Grid */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <a href={`tel:${data.phone}`} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+            <a 
+                href={`tel:${data.phone}`} 
+                onClick={() => trackClick('call')}
+                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+            >
               <Phone size={20} style={{ color: themeColor }} />
               <span className="font-bold">اتصال</span>
             </a>
             
             {data.whatsapp ? (
-              <a href={`https://wa.me/${data.whatsapp.replace(/\+/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+              <a 
+                href={`https://wa.me/${data.whatsapp.replace(/\+/g, '')}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                onClick={() => trackClick('whatsapp')}
+                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+              >
                 <MessageCircle size={20} className="text-emerald-500" />
                 <span className="font-bold">واتساب</span>
               </a>
@@ -915,14 +1087,24 @@ END:VCARD`;
             )}
 
             {data.email ? (
-              <a href={`mailto:${data.email}`} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+              <a 
+                href={`mailto:${data.email}`} 
+                onClick={() => trackClick('email')}
+                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+              >
                 <Mail size={20} style={{ color: themeColor }} />
                 <span className="font-bold">إيميل</span>
               </a>
             ) : null}
 
             {data.website ? (
-              <a href={data.website} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+              <a 
+                href={data.website} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                onClick={() => trackClick('website')}
+                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+              >
                 <Globe size={20} style={{ color: themeColor }} />
                 <span className="font-bold">الموقع</span>
               </a>
@@ -930,7 +1112,13 @@ END:VCARD`;
 
             {/* زر الـ CV الجديد */}
             {data.cvUrl ? (
-              <a href={data.cvUrl} target="_blank" rel="noopener noreferrer" className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+              <a 
+                href={data.cvUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                onClick={() => trackClick('download_cv')}
+                className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
+              >
                 <FileText size={20} className="text-orange-500" />
                 <span className="font-bold">تحميل السيرة الذاتية (CV)</span>
               </a>
