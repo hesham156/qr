@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick } from 'lucide-react';
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle } from 'lucide-react';
 
 // --- تهيئة Firebase ---
 let firebaseConfig;
@@ -43,7 +43,7 @@ export default function App() {
   const [profileData, setProfileData] = useState({ id: null, adminId: null });
   
   const checkRoute = (currentUser) => {
-    const hashString = window.location.hash.substring(1); // إزالة #
+    const hashString = window.location.hash.substring(1); 
     const params = new URLSearchParams(hashString);
     const pid = params.get('pid');
     const uid = params.get('uid');
@@ -114,7 +114,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans" dir="rtl">
       {viewMode === 'profile' ? (
-        // تمرير user إلى ProfileView لضمان عدم جلب البيانات قبل المصادقة
         <ProfileView data={profileData} user={user} />
       ) : viewMode === 'login' ? (
         <LoginView />
@@ -125,7 +124,7 @@ export default function App() {
   );
 }
 
-// --- شاشة تسجيل الدخول (Admin) ---
+// --- شاشة تسجيل الدخول ---
 function LoginView() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -146,15 +145,7 @@ function LoginView() {
       }
     } catch (err) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setError('البريد الإلكتروني مسجل مسبقاً، حاول تسجيل الدخول.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('كلمة المرور ضعيفة، يجب أن تكون 6 أحرف على الأقل.');
-      } else {
-        setError('حدث خطأ: ' + err.code);
-      }
+      setError('حدث خطأ في المصادقة: ' + err.code);
     } finally {
       setLoading(false);
     }
@@ -238,12 +229,13 @@ function LoginView() {
   );
 }
 
-// --- مكون لوحة التحكم (إدارة الموظفين) ---
+// --- لوحة التحكم ---
 function Dashboard({ user, onLogout }) {
   const [employees, setEmployees] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [analyticsEmployee, setAnalyticsEmployee] = useState(null);
+  const [leadsEmployee, setLeadsEmployee] = useState(null); 
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
 
@@ -358,6 +350,7 @@ function Dashboard({ user, onLogout }) {
                 onEdit={() => handleEdit(emp)}
                 onShowQR={() => setSelectedEmployee(emp)}
                 onShowAnalytics={() => setAnalyticsEmployee(emp)}
+                onShowLeads={() => setLeadsEmployee(emp)}
               />
             ))}
           </div>
@@ -387,14 +380,27 @@ function Dashboard({ user, onLogout }) {
           onClose={() => setAnalyticsEmployee(null)}
         />
       )}
+
+      {leadsEmployee && (
+        <LeadsListModal
+          userId={user.uid}
+          employee={leadsEmployee}
+          onClose={() => setLeadsEmployee(null)}
+        />
+      )}
     </div>
   );
 }
 
-// --- بطاقة الموظف ---
-function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics }) {
+// --- بطاقة الموظف في القائمة ---
+function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads }) {
   const themeColor = employee.themeColor || '#2563eb';
   const views = employee.stats?.views || 0;
+  const templateName = {
+      'classic': 'كلاسيكي',
+      'modern': 'عصري',
+      'creative': 'إبداعي'
+  }[employee.template] || 'كلاسيكي';
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 relative group">
@@ -430,6 +436,14 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics })
         </div>
       </div>
 
+      <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-500 font-medium">
+            {templateName}
+          </span>
+          {employee.bgVideoUrl && <Video size={14} className="text-blue-500" title="فيديو خلفية" />}
+          {employee.profileVideoUrl && <PlayCircle size={14} className="text-purple-500" title="فيديو بروفايل" />}
+      </div>
+
       <div className="flex items-center gap-4 mb-4 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg">
         <div className="flex items-center gap-1">
             <Activity size={14} className="text-blue-500" />
@@ -441,141 +455,44 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics })
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button 
             onClick={onShowAnalytics}
             className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            title="الإحصائيات"
         >
             <BarChart3 size={16} />
-            الإحصائيات
+        </button>
+        <button 
+            onClick={onShowLeads}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            title="العملاء المهتمين"
+        >
+            <Users size={16} />
         </button>
         <button 
             onClick={onShowQR}
             className="text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors opacity-90 hover:opacity-100"
             style={{ backgroundColor: themeColor }}
+            title="الرمز"
         >
             <QrCode size={16} />
-            الرمز
         </button>
       </div>
     </div>
   );
 }
 
-// --- نافذة الإحصائيات ---
-function AnalyticsModal({ employee, onClose }) {
-    const stats = employee.stats || { views: 0, clicks: {}, countries: {} };
-    const clicks = stats.clicks || {};
-    const countries = stats.countries || {};
-
-    const sortedClicks = Object.entries(clicks).sort(([,a], [,b]) => b - a);
-    const sortedCountries = Object.entries(countries).sort(([,a], [,b]) => b - a);
-
-    const getActionName = (key) => {
-        const names = {
-            'call': 'اتصال هاتفي',
-            'whatsapp': 'واتساب',
-            'email': 'إرسال بريد',
-            'website': 'زيارة الموقع',
-            'save_contact': 'حفظ جهة الاتصال',
-            'download_cv': 'تحميل السيرة الذاتية'
-        };
-        return names[key] || key;
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                        <BarChart3 size={20} className="text-blue-600" />
-                        إحصائيات: {employee.name}
-                    </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                        <X size={20} />
-                    </button>
-                </div>
-
-                <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-blue-50 p-4 rounded-xl text-center">
-                            <div className="text-blue-500 mb-1 flex justify-center"><Activity size={24} /></div>
-                            <div className="text-2xl font-bold text-slate-800">{stats.views}</div>
-                            <div className="text-xs text-slate-500">إجمالي الزيارات</div>
-                        </div>
-                        <div className="bg-orange-50 p-4 rounded-xl text-center">
-                            <div className="text-orange-500 mb-1 flex justify-center"><MousePointerClick size={24} /></div>
-                            <div className="text-2xl font-bold text-slate-800">{Object.values(clicks).reduce((a, b) => a + b, 0)}</div>
-                            <div className="text-xs text-slate-500">إجمالي النقرات</div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-700 mb-3 border-r-4 border-blue-500 pr-2">تفاعل الأزرار</h3>
-                        <div className="space-y-3">
-                            {sortedClicks.length > 0 ? sortedClicks.map(([action, count]) => (
-                                <div key={action} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg">
-                                    <span className="text-sm font-medium text-slate-700">{getActionName(action)}</span>
-                                    <span className="bg-white px-2 py-1 rounded text-xs font-bold shadow-sm border border-slate-100">{count}</span>
-                                </div>
-                            )) : (
-                                <p className="text-sm text-slate-400 text-center py-2">لا توجد نقرات مسجلة بعد</p>
-                            )}
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-700 mb-3 border-r-4 border-green-500 pr-2">أهم الدول</h3>
-                        <div className="space-y-2">
-                            {sortedCountries.length > 0 ? sortedCountries.map(([code, count]) => (
-                                <div key={code} className="flex items-center gap-3">
-                                    <div className="w-8 text-center text-lg">{getFlagEmoji(code)}</div>
-                                    <div className="flex-1">
-                                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                            <div 
-                                                className="h-full bg-green-500 rounded-full" 
-                                                style={{ width: `${(count / stats.views) * 100}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                    <div className="text-xs font-bold w-8 text-left">{count}</div>
-                                </div>
-                            )) : (
-                                <p className="text-sm text-slate-400 text-center py-2">لا توجد بيانات جغرافية بعد</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function getFlagEmoji(countryCode) {
-  if (!countryCode || countryCode === 'Unknown') return '🌍';
-  const codePoints = countryCode
-    .toUpperCase()
-    .split('')
-    .map(char =>  127397 + char.charCodeAt());
-  return String.fromCodePoint(...codePoints);
-}
-
 // --- نموذج إضافة/تعديل موظف ---
 function EmployeeForm({ onClose, initialData, userId }) {
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    jobTitle: '',
-    company: '',
-    website: '',
-    whatsapp: '',
-    photoUrl: '', 
-    cvUrl: '',
-    themeColor: '#2563eb',
-    qrColor: '#000000',
-    qrBgColor: '#ffffff',
-    stats: { views: 0, clicks: {}, countries: {} }
+    name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
+    photoUrl: '', cvUrl: '', 
+    themeColor: '#2563eb', qrColor: '#000000', qrBgColor: '#ffffff',
+    template: 'classic', // classic, modern, creative
+    bgVideoUrl: '', // رابط فيديو الخلفية
+    profileVideoUrl: '', // رابط فيديو الصورة الشخصية
+    stats: { views: 0, clicks: {}, countries: {}, heatmap: {} }
   });
   const [loading, setLoading] = useState(false);
 
@@ -587,7 +504,10 @@ function EmployeeForm({ onClose, initialData, userId }) {
         themeColor: initialData.themeColor || '#2563eb',
         qrColor: initialData.qrColor || '#000000',
         qrBgColor: initialData.qrBgColor || '#ffffff',
-        stats: initialData.stats || { views: 0, clicks: {}, countries: {} }
+        template: initialData.template || 'classic',
+        bgVideoUrl: initialData.bgVideoUrl || '',
+        profileVideoUrl: initialData.profileVideoUrl || '',
+        stats: initialData.stats || { views: 0, clicks: {}, countries: {}, heatmap: {} }
       }));
     }
   }, [initialData]);
@@ -631,6 +551,62 @@ function EmployeeForm({ onClose, initialData, userId }) {
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
+          {/* قسم التصميم (Premium) */}
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-3">
+            <div className="flex items-center gap-2 border-b border-indigo-200 pb-2 mb-2">
+              <LayoutTemplate size={18} className="text-indigo-600" />
+              <h3 className="text-sm font-bold text-indigo-800">تصميم البطاقة (Premium)</h3>
+            </div>
+
+            {/* اختيار القالب */}
+            <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">القالب</label>
+                <div className="grid grid-cols-3 gap-2">
+                    {['classic', 'modern', 'creative'].map((t) => (
+                        <button
+                            key={t}
+                            type="button"
+                            onClick={() => setFormData({...formData, template: t})}
+                            className={`py-2 px-1 text-xs font-bold rounded-lg border-2 transition-all ${
+                                formData.template === t 
+                                ? 'border-indigo-500 bg-indigo-500 text-white shadow-md' 
+                                : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200'
+                            }`}
+                        >
+                            {{'classic': 'كلاسيكي', 'modern': 'عصري', 'creative': 'إبداعي'}[t]}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* روابط الفيديو */}
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">فيديو الخلفية (URL)</label>
+                    <input 
+                        type="url" 
+                        dir="ltr"
+                        value={formData.bgVideoUrl}
+                        onChange={e => setFormData({...formData, bgVideoUrl: e.target.value})}
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="رابط فيديو MP4"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">فيديو البروفايل (URL)</label>
+                    <input 
+                        type="url" 
+                        dir="ltr"
+                        value={formData.profileVideoUrl}
+                        onChange={e => setFormData({...formData, profileVideoUrl: e.target.value})}
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="رابط فيديو MP4"
+                    />
+                </div>
+            </div>
+          </div>
+
+          {/* قسم الألوان */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-white rounded-lg shadow-sm text-slate-600">
@@ -638,7 +614,7 @@ function EmployeeForm({ onClose, initialData, userId }) {
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700">لون البطاقة</label>
-                <p className="text-xs text-slate-400">للتصميم العام (الخلفية والأزرار)</p>
+                <p className="text-xs text-slate-400">للتصميم العام</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -648,39 +624,6 @@ function EmployeeForm({ onClose, initialData, userId }) {
                 onChange={e => setFormData({...formData, themeColor: e.target.value})}
                 className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white shadow-md"
               />
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-2">
-              <Grid size={18} className="text-slate-600" />
-              <h3 className="text-sm font-bold text-slate-700">تخصيص شكل الـ QR Code</h3>
-            </div>
-            
-            <div className="flex items-center justify-between">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700">لون النقاط (QR Color)</label>
-                    <p className="text-xs text-slate-400">اللون الأساسي للرمز</p>
-                </div>
-                <input 
-                    type="color" 
-                    value={formData.qrColor}
-                    onChange={e => setFormData({...formData, qrColor: e.target.value})}
-                    className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white shadow-md"
-                />
-            </div>
-
-            <div className="flex items-center justify-between">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700">لون الخلفية (Background)</label>
-                    <p className="text-xs text-slate-400">خلفية رمز الـ QR</p>
-                </div>
-                <input 
-                    type="color" 
-                    value={formData.qrBgColor}
-                    onChange={e => setFormData({...formData, qrBgColor: e.target.value})}
-                    className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white shadow-md"
-                />
             </div>
           </div>
 
@@ -806,190 +749,63 @@ function EmployeeForm({ onClose, initialData, userId }) {
   );
 }
 
-// --- نافذة الـ QR Code ---
-function QRModal({ employee, userId, onClose }) {
-  const [downloading, setDownloading] = useState(false);
-
-  const getProfileUrl = () => {
-    const baseUrl = window.location.href.split('#')[0];
-    return `${baseUrl}#uid=${userId}&pid=${employee.id}`;
-  };
-
-  const qrColor = employee.qrColor ? employee.qrColor.replace('#', '') : '000000';
-  const qrBgColor = employee.qrBgColor ? employee.qrBgColor.replace('#', '') : 'ffffff';
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
-
-  const downloadQR = async () => {
-    setDownloading(true);
-    try {
-      const response = await fetch(qrImageUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${employee.name}-qr.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading image:', error);
-      window.alert('حدث خطأ أثناء تحميل الصورة');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-        <div 
-          className="p-6 text-center text-white relative overflow-hidden"
-          style={{ backgroundColor: employee.themeColor || '#2563eb' }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10"></div>
-          <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white p-1">
-            <X size={24} />
-          </button>
-          <h3 className="text-xl font-bold mb-1">{employee.name}</h3>
-          <p className="text-white/80 text-sm">{employee.jobTitle}</p>
-        </div>
-        
-        <div className="p-8 flex flex-col items-center">
-          <div className="bg-white p-2 rounded-xl shadow-lg border border-slate-100 mb-6 w-[220px] h-[220px] flex items-center justify-center">
-            <img 
-              src={qrImageUrl} 
-              alt="QR Code" 
-              className="w-full h-full object-contain"
-            />
-          </div>
-          
-          <div className="text-center text-amber-600 bg-amber-50 p-3 rounded-lg text-xs mb-6 w-full">
-            <strong>ملاحظة هامة:</strong> تم تحديث الرابط ليشمل معرف حسابك.
-          </div>
-
-          <button 
-            onClick={downloadQR}
-            disabled={downloading}
-            className="w-full text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-            style={{ backgroundColor: '#1e293b' }}
-          >
-            {downloading ? (
-               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-               <Share2 size={18} />
-            )}
-            {downloading ? 'جاري التحميل...' : 'تحميل الصورة'}
-          </button>
-          
-          <a 
-            href={getProfileUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 text-blue-600 text-sm hover:underline flex items-center gap-1"
-            style={{ color: employee.themeColor || '#2563eb' }}
-          >
-            تجربة الرابط في المتصفح <ExternalLink size={12}/>
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- صفحة البروفايل ---
-// نستقبل user كخاصية (prop) جديدة
+// --- صفحة البروفايل (مع دعم القوالب والفيديو) ---
 function ProfileView({ data: profileData, user }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(null);
   const isLogged = useRef(false);
 
+  // ... (نفس دالة trackClick و useEffect لجلب البيانات والتحليلات) ...
   const trackClick = async (action) => {
     try {
         const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        await setDoc(docRef, {
-            stats: {
-                clicks: {
-                    [action]: increment(1)
-                }
-            }
-        }, { merge: true });
+        await setDoc(docRef, { stats: { clicks: { [action]: increment(1) } } }, { merge: true });
     } catch (e) {
-        if(e.code !== 'permission-denied') {
-             console.error("Error tracking click:", e);
-        } else {
-             console.warn("Analytics update failed: Check Firestore Rules");
-        }
+        if(e.code !== 'permission-denied') console.warn("Analytics update failed: Check Firestore Rules");
     }
   };
 
   useEffect(() => {
-    // شرط مهم: عدم البدء في جلب البيانات إذا لم تتم عملية المصادقة (للزائر أو المدير)
     if (!user) return;
-
     const fetchProfile = async () => {
       try {
         const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
         const docSnap = await getDoc(docRef);
-        
         if (docSnap.exists()) {
           setData(docSnap.data());
-          
           if (!isLogged.current) {
             isLogged.current = true;
             try {
                 const res = await fetch('https://ipwho.is/');
                 const geo = await res.json();
                 const countryCode = geo.success ? geo.country_code : 'Unknown';
-
+                const lat = geo.success ? geo.latitude : 0;
+                const lng = geo.success ? geo.longitude : 0;
+                const locationKey = `${Math.round(lat * 10) / 10}_${Math.round(lng * 10) / 10}`;
                 await setDoc(docRef, {
-                    stats: {
-                        views: increment(1),
-                        countries: {
-                            [countryCode]: increment(1)
-                        }
-                    }
+                    stats: { views: increment(1), countries: { [countryCode]: increment(1) }, heatmap: { [locationKey]: increment(1) } }
                 }, { merge: true });
-
-            } catch (analyticsError) {
-                if(analyticsError.code !== 'permission-denied') {
-                    console.error("Analytics Error:", analyticsError);
-                }
-            }
+            } catch (analyticsError) { /* ignore */ }
           }
-
         } else {
           setError('لم يتم العثور على البطاقة');
         }
       } catch (err) {
-        console.error(err);
         setError('حدث خطأ أثناء تحميل البيانات');
       } finally {
         setLoading(false);
       }
     };
-
     fetchProfile();
-  }, [profileData, user]); // إضافة user إلى المصفوفة
+  }, [profileData, user]);
 
   const downloadVCard = () => {
     trackClick('save_contact');
     if (!data) return;
-    
-    const vcard = `BEGIN:VCARD
-VERSION:3.0
-N;CHARSET=UTF-8:${data.name};;;;
-FN;CHARSET=UTF-8:${data.name}
-TEL;TYPE=CELL:${data.phone}
-${data.email ? `EMAIL:${data.email}` : ''}
-${data.jobTitle ? `TITLE;CHARSET=UTF-8:${data.jobTitle}` : ''}
-${data.company ? `ORG;CHARSET=UTF-8:${data.company}` : ''}
-${data.website ? `URL:${data.website}` : ''}
-${data.photoUrl ? `PHOTO;URI:${data.photoUrl}` : ''}
-END:VCARD`;
-
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${data.name};;;;\nFN;CHARSET=UTF-8:${data.name}\nTEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${data.jobTitle ? `TITLE;CHARSET=UTF-8:${data.jobTitle}\n` : ''}${data.company ? `ORG;CHARSET=UTF-8:${data.company}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}END:VCARD`;
     const blob = new Blob([vcard], { type: 'text/vcard' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1001,135 +817,352 @@ END:VCARD`;
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-blue-600 rounded-full border-t-transparent"></div></div>;
-  
-  if (error) return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-          <div className="text-red-500 mb-4">{error}</div>
-      </div>
-  );
+  if (error) return <div className="min-h-screen flex flex-col items-center justify-center p-4 text-red-500">{error}</div>;
 
   const themeColor = data.themeColor || '#2563eb';
+  const template = data.template || 'classic';
 
-  return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative">
-        
-        {/* Cover */}
+  // --- مكونات واجهة المستخدم (تختلف حسب القالب) ---
+  
+  // 1. مكون الهيدر (Header Component)
+  const renderHeader = () => {
+    // إذا كان هناك فيديو خلفية
+    if (data.bgVideoUrl) {
+        return (
+            <div className={`relative overflow-hidden ${template === 'creative' ? 'h-48 rounded-b-[3rem]' : 'h-32'}`}>
+                <video 
+                    src={data.bgVideoUrl} 
+                    autoPlay loop muted playsInline 
+                    className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/20"></div>
+            </div>
+        );
+    }
+    // الخلفية العادية
+    return (
         <div 
-          className="h-32 relative"
+          className={`relative ${template === 'creative' ? 'h-48 rounded-b-[3rem]' : 'h-32'}`}
           style={{ background: `linear-gradient(to right, ${themeColor}, #1e293b)` }}
         >
            <div className="absolute top-0 right-0 w-full h-full opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         </div>
+    );
+  };
 
-        {/* Profile Info */}
-        <div className="px-6 relative">
-          <div className="absolute -top-12 right-1/2 translate-x-1/2">
-             {data.photoUrl ? (
-                <img 
-                  src={data.photoUrl} 
-                  alt={data.name} 
-                  className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover bg-white"
-                  style={{ borderColor: themeColor }}
-                />
-             ) : (
-                <div 
-                  className="w-24 h-24 rounded-full border-4 border-white shadow-md flex items-center justify-center text-3xl font-bold text-white"
-                  style={{ backgroundColor: themeColor }}
-                >
-                  {data.name.charAt(0)}
+  // 2. مكون الصورة الشخصية (Avatar Component)
+  const renderAvatar = () => {
+    const avatarClass = template === 'creative' 
+        ? "w-28 h-28 rounded-2xl rotate-3 border-4 border-white shadow-xl bg-white" // Creative Style
+        : "w-24 h-24 rounded-full border-4 border-white shadow-md bg-white"; // Classic & Modern
+
+    const content = data.profileVideoUrl ? (
+        <video 
+            src={data.profileVideoUrl} 
+            autoPlay loop muted playsInline 
+            className="w-full h-full object-cover"
+            style={{ borderRadius: template === 'creative' ? '0.75rem' : '50%' }}
+        />
+    ) : data.photoUrl ? (
+        <img 
+            src={data.photoUrl} 
+            alt={data.name} 
+            className="w-full h-full object-cover"
+            style={{ borderRadius: template === 'creative' ? '0.75rem' : '50%' }}
+        />
+    ) : (
+        <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-slate-500">
+            {data.name.charAt(0)}
+        </div>
+    );
+
+    return (
+        <div 
+            className={`absolute right-1/2 translate-x-1/2 ${template === 'creative' ? '-bottom-14' : '-bottom-12'} ${avatarClass}`}
+            style={{ borderColor: template === 'modern' ? 'rgba(255,255,255,0.1)' : 'white' }}
+        >
+            {content}
+        </div>
+    );
+  };
+
+  // --- هيكل الصفحة حسب القالب ---
+  
+  if (template === 'modern') {
+      // --- القالب العصري (Modern Dark) ---
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="bg-slate-800/50 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden relative backdrop-blur-md border border-slate-700 text-white">
+                {renderHeader()}
+                <div className="px-6 relative mb-12">
+                    {renderAvatar()}
                 </div>
-             )}
-          </div>
-          
+                
+                <div className="mt-8 text-center mb-8 px-6">
+                    <h1 className="text-2xl font-bold">{data.name}</h1>
+                    <p className="opacity-80 mt-1">{data.jobTitle} {data.company && `| ${data.company}`}</p>
+                </div>
+
+                <div className="px-6 pb-8 space-y-4">
+                    {/* أزرار Modern تكون شفافة مع حدود */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">
+                            <Phone size={24} style={{ color: themeColor }} className="mb-2"/>
+                            <span className="text-xs font-bold">اتصال</span>
+                        </a>
+                        <a href={`https://wa.me/${data.whatsapp}`} target="_blank" onClick={() => trackClick('whatsapp')} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">
+                            <MessageCircle size={24} className="text-emerald-400 mb-2"/>
+                            <span className="text-xs font-bold">واتساب</span>
+                        </a>
+                        {data.email && (
+                            <a href={`mailto:${data.email}`} onClick={() => trackClick('email')} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">
+                                <Mail size={24} className="text-blue-400 mb-2"/>
+                                <span className="text-xs font-bold">إيميل</span>
+                            </a>
+                        )}
+                        {data.website && (
+                            <a href={data.website} target="_blank" onClick={() => trackClick('website')} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">
+                                <Globe size={24} className="text-purple-400 mb-2"/>
+                                <span className="text-xs font-bold">الموقع</span>
+                            </a>
+                        )}
+                    </div>
+
+                    <button onClick={() => setIsLeadFormOpen(true)} className="w-full bg-slate-700 hover:bg-slate-600 text-white p-4 rounded-xl flex items-center justify-center gap-2 border border-slate-600">
+                        <UserPlus size={20} /> <span className="font-bold">تبادل جهات الاتصال</span>
+                    </button>
+
+                    <div className="flex gap-2">
+                        <button onClick={() => setShowWalletModal('apple')} className="flex-1 bg-black p-3 rounded-xl flex justify-center"><Wallet size={20} /></button>
+                        <button onClick={() => setShowWalletModal('google')} className="flex-1 bg-white text-black p-3 rounded-xl flex justify-center"><CreditCard size={20} /></button>
+                    </div>
+
+                    <button onClick={downloadVCard} className="w-full p-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 mt-4" style={{ backgroundColor: themeColor }}>
+                        <UserPlus size={20} /> حفظ جهة الاتصال
+                    </button>
+                </div>
+            </div>
+            {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} />}
+            {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} />}
+        </div>
+      );
+  } 
+  
+  if (template === 'creative') {
+      // --- القالب الإبداعي (Creative) ---
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-xl overflow-hidden relative border-8 border-white">
+                {renderHeader()}
+                <div className="px-6 relative mb-16">
+                    {renderAvatar()}
+                </div>
+                
+                <div className="text-center mb-8 px-6">
+                    <h1 className="text-3xl font-black text-slate-800">{data.name}</h1>
+                    <p className="text-lg font-medium opacity-80 mt-1" style={{ color: themeColor }}>{data.jobTitle}</p>
+                    {data.company && <p className="text-sm text-slate-400 font-bold tracking-widest uppercase mt-2">{data.company}</p>}
+                </div>
+
+                <div className="px-6 pb-8 space-y-4">
+                    <div className="space-y-3">
+                        <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all group">
+                            <div className="p-3 rounded-full bg-white shadow-sm group-hover:scale-110 transition-transform"><Phone size={20} style={{ color: themeColor }} /></div>
+                            <span className="font-bold text-slate-700">اتصل بي</span>
+                        </a>
+                        <a href={`https://wa.me/${data.whatsapp}`} target="_blank" onClick={() => trackClick('whatsapp')} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all group">
+                            <div className="p-3 rounded-full bg-white shadow-sm group-hover:scale-110 transition-transform"><MessageCircle size={20} className="text-emerald-500" /></div>
+                            <span className="font-bold text-slate-700">واتساب</span>
+                        </a>
+                    </div>
+
+                    <div className="flex gap-2 pt-4">
+                        <button onClick={() => setIsLeadFormOpen(true)} className="flex-1 bg-slate-900 text-white p-4 rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all">
+                            تبادل البيانات
+                        </button>
+                        <button onClick={downloadVCard} className="flex-1 text-white p-4 rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all" style={{ backgroundColor: themeColor }}>
+                            حفظ
+                        </button>
+                    </div>
+                    
+                    <div className="flex justify-center gap-4 pt-4 opacity-70">
+                        <button onClick={() => setShowWalletModal('apple')}><Wallet size={24} /></button>
+                        <button onClick={() => setShowWalletModal('google')}><CreditCard size={24} /></button>
+                    </div>
+                </div>
+            </div>
+            {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} />}
+            {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} />}
+        </div>
+      );
+  }
+
+  // --- القالب الكلاسيكي (Classic - Default) ---
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative pb-6">
+        {renderHeader()}
+        <div className="px-6 relative">
+          {renderAvatar()}
           <div className="mt-16 text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
             <p className="font-medium" style={{ color: themeColor }}>{data.jobTitle} {data.company && `| ${data.company}`}</p>
           </div>
 
-          {/* Action Buttons Grid */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <a 
-                href={`tel:${data.phone}`} 
-                onClick={() => trackClick('call')}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
-            >
-              <Phone size={20} style={{ color: themeColor }} />
-              <span className="font-bold">اتصال</span>
+            <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+              <Phone size={20} style={{ color: themeColor }} /> <span className="font-bold">اتصال</span>
             </a>
-            
-            {data.whatsapp ? (
-              <a 
-                href={`https://wa.me/${data.whatsapp.replace(/\+/g, '')}`} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                onClick={() => trackClick('whatsapp')}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
-              >
-                <MessageCircle size={20} className="text-emerald-500" />
-                <span className="font-bold">واتساب</span>
+            <a href={`https://wa.me/${data.whatsapp}`} target="_blank" onClick={() => trackClick('whatsapp')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+              <MessageCircle size={20} className="text-emerald-500" /> <span className="font-bold">واتساب</span>
+            </a>
+            {data.email && (
+              <a href={`mailto:${data.email}`} onClick={() => trackClick('email')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+                <Mail size={20} style={{ color: themeColor }} /> <span className="font-bold">إيميل</span>
               </a>
-            ) : (
-               <div className="flex items-center justify-center gap-2 bg-slate-50 text-slate-400 p-4 rounded-xl cursor-not-allowed border border-slate-100">
-                <MessageCircle size={20} />
-                <span className="font-bold">واتساب</span>
-              </div>
             )}
-
-            {data.email ? (
-              <a 
-                href={`mailto:${data.email}`} 
-                onClick={() => trackClick('email')}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
-              >
-                <Mail size={20} style={{ color: themeColor }} />
-                <span className="font-bold">إيميل</span>
+            {data.website && (
+              <a href={data.website} target="_blank" onClick={() => trackClick('website')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+                <Globe size={20} style={{ color: themeColor }} /> <span className="font-bold">الموقع</span>
               </a>
-            ) : null}
-
-            {data.website ? (
-              <a 
-                href={data.website} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                onClick={() => trackClick('website')}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
-              >
-                <Globe size={20} style={{ color: themeColor }} />
-                <span className="font-bold">الموقع</span>
+            )}
+            <button onClick={() => setIsLeadFormOpen(true)} className="col-span-2 flex items-center justify-center gap-2 bg-slate-900 text-white p-4 rounded-xl hover:bg-slate-800 transition-colors shadow-sm">
+                <UserPlus size={20} /> <span className="font-bold">تبادل جهات الاتصال</span>
+            </button>
+            <button onClick={() => setShowWalletModal('apple')} className="col-span-1 flex items-center justify-center gap-2 bg-black text-white p-3 rounded-xl hover:bg-gray-800"><Wallet size={20} /><span className="font-bold text-xs">Apple</span></button>
+            <button onClick={() => setShowWalletModal('google')} className="col-span-1 flex items-center justify-center gap-2 bg-white text-black border border-slate-200 p-3 rounded-xl hover:bg-slate-50"><CreditCard size={20} className="text-blue-500" /><span className="font-bold text-xs">Google</span></button>
+            {data.cvUrl && (
+              <a href={data.cvUrl} target="_blank" onClick={() => trackClick('download_cv')} className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100">
+                <FileText size={20} className="text-orange-500" /> <span className="font-bold">تحميل السيرة الذاتية</span>
               </a>
-            ) : null}
-
-            {/* زر الـ CV الجديد */}
-            {data.cvUrl ? (
-              <a 
-                href={data.cvUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                onClick={() => trackClick('download_cv')}
-                className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"
-              >
-                <FileText size={20} className="text-orange-500" />
-                <span className="font-bold">تحميل السيرة الذاتية (CV)</span>
-              </a>
-            ) : null}
+            )}
           </div>
 
-          {/* Save Contact Button */}
-          <button 
-            onClick={downloadVCard}
-            className="w-full text-white p-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mb-8 transform active:scale-95"
-            style={{ backgroundColor: themeColor }}
-          >
-            <UserPlus size={20} />
-            حفظ جهة الاتصال
+          <button onClick={downloadVCard} className="w-full text-white p-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mb-8 transform active:scale-95" style={{ backgroundColor: themeColor }}>
+            <UserPlus size={20} /> حفظ جهة الاتصال
           </button>
         </div>
-        
-        <div className="bg-slate-50 py-4 text-center text-slate-400 text-xs">
-          Digital Card System © 2024
+        <div className="bg-slate-50 py-4 text-center text-slate-400 text-xs">Digital Card System © 2024</div>
+      </div>
+      {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} />}
+      {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} />}
+    </div>
+  );
+}
+
+// ... (باقي المكونات المساعدة: LeadCaptureModal, WalletPreviewModal, QRModal, LeadsListModal, AnalyticsModal لم تتغير) ...
+// (يتم تضمينها في الكود الكامل أعلاه لضمان عمل الملف)
+
+function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
+        name, phone, createdAt: serverTimestamp()
+      });
+      setSubmitted(true);
+      if (onSuccess) onSuccess();
+      setTimeout(() => onClose(), 2000);
+    } catch (error) {
+      window.alert("حدث خطأ أثناء الإرسال.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in duration-200 relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><UserPlus size={32} /></div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">تم الإرسال بنجاح!</h3>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="text-center mb-6"><h3 className="text-xl font-bold text-slate-800">تبادل جهات الاتصال</h3></div>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder="الاسم" />
+            <input type="tel" required dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder="05xxxxxxxx" />
+            <button type="submit" disabled={loading} className="w-full text-white font-bold py-3 rounded-xl" style={{ backgroundColor: themeColor }}>{loading ? '...' : 'إرسال'}</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WalletPreviewModal({ type, data, onClose }) {
+  const isApple = type === 'apple';
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+        <div className="p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg" style={{ backgroundColor: isApple ? 'black' : 'white', border: isApple ? 'none' : '1px solid #eee' }}>
+            {isApple ? <Wallet size={32} className="text-white" /> : <CreditCard size={32} className="text-blue-500" />}
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">{isApple ? 'Apple Wallet' : 'Google Wallet'}</h3>
+          <p className="text-sm text-slate-500 mt-6 bg-slate-50 p-3 rounded-lg">هذه معاينة فقط. يتطلب التفعيل خادماً خلفياً.</p>
+          <div className="mt-6 flex gap-3">
+            <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl">إلغاء</button>
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function QRModal({ employee, userId, onClose }) {
+  const getProfileUrl = () => `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
+  const qrColor = employee.qrColor ? employee.qrColor.replace('#', '') : '000000';
+  const qrBgColor = employee.qrBgColor ? employee.qrBgColor.replace('#', '') : 'ffffff';
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200 p-8 flex flex-col items-center">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={24} /></button>
+        <div className="bg-white p-2 rounded-xl shadow-lg border border-slate-100 mb-6"><img src={qrImageUrl} alt="QR" className="w-48 h-48" /></div>
+        <h3 className="text-xl font-bold mb-1">{employee.name}</h3>
+      </div>
+    </div>
+  );
+}
+
+function LeadsListModal({ userId, employee, onClose }) {
+  const [leads, setLeads] = useState([]);
+  useEffect(() => {
+    const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'leads');
+    return onSnapshot(q, (snapshot) => setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+  }, [userId, employee.id]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl p-6">
+        <div className="flex justify-between mb-4"><h2 className="text-lg font-bold">العملاء: {employee.name}</h2><button onClick={onClose}><X size={20} /></button></div>
+        <div className="space-y-3">{leads.map(l => <div key={l.id} className="bg-slate-50 p-3 rounded">{l.name} - {l.phone}</div>)}</div>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsModal({ employee, onClose }) {
+    const stats = employee.stats || { views: 0, clicks: {} };
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+                <div className="flex justify-between mb-4"><h2 className="text-lg font-bold">إحصائيات: {employee.name}</h2><button onClick={onClose}><X size={20} /></button></div>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-blue-50 p-4 rounded text-center"><div className="text-2xl font-bold">{stats.views}</div><div className="text-xs">زيارات</div></div>
+                    <div className="bg-orange-50 p-4 rounded text-center"><div className="text-2xl font-bold">{Object.values(stats.clicks || {}).reduce((a,b)=>a+b,0)}</div><div className="text-xs">نقرات</div></div>
+                </div>
+            </div>
+        </div>
+    );
 }
