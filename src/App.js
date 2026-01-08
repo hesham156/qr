@@ -872,7 +872,7 @@ END:VCARD`;
 
         {/* Profile Info */}
         <div className="px-6 relative">
-          <div className="absolute -top-12 right-1/2 translate-x-1/2">
+          <div className="absolute top-[-112px] right-1/2 translate-x-1/2">
              {data.photoUrl ? (
                 <img 
                   src={data.photoUrl} 
