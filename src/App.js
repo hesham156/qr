@@ -114,7 +114,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans" dir="rtl">
       {viewMode === 'profile' ? (
-        <ProfileView data={profileData} />
+        // تمرير user إلى ProfileView لضمان عدم جلب البيانات قبل المصادقة
+        <ProfileView data={profileData} user={user} />
       ) : viewMode === 'login' ? (
         <LoginView />
       ) : (
@@ -461,7 +462,7 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics })
   );
 }
 
-// --- نافذة الإحصائيات (جديد) ---
+// --- نافذة الإحصائيات ---
 function AnalyticsModal({ employee, onClose }) {
     const stats = employee.stats || { views: 0, clicks: {}, countries: {} };
     const clicks = stats.clicks || {};
@@ -898,17 +899,16 @@ function QRModal({ employee, userId, onClose }) {
 }
 
 // --- صفحة البروفايل ---
-function ProfileView({ data: profileData }) {
+// نستقبل user كخاصية (prop) جديدة
+function ProfileView({ data: profileData, user }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const isLogged = useRef(false); // لمنع تكرار تسجيل الزيارة في نفس الجلسة
+  const isLogged = useRef(false);
 
-  // دالة لتسجيل النقرات (Clicks Analytics)
   const trackClick = async (action) => {
     try {
         const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        // نستخدم try-catch داخلي لتجنب إظهار أخطاء الصلاحيات للمستخدم
         await setDoc(docRef, {
             stats: {
                 clicks: {
@@ -917,17 +917,18 @@ function ProfileView({ data: profileData }) {
             }
         }, { merge: true });
     } catch (e) {
-        // نتجاهل أخطاء الصلاحيات هنا حتى لا نعطل تجربة المستخدم
-        // لتفعيل التحليلات، يجب تعديل Firestore Rules
         if(e.code !== 'permission-denied') {
              console.error("Error tracking click:", e);
         } else {
-             console.warn("Analytics update failed: Check Firestore Rules to allow public updates to 'stats' field.");
+             console.warn("Analytics update failed: Check Firestore Rules");
         }
     }
   };
 
   useEffect(() => {
+    // شرط مهم: عدم البدء في جلب البيانات إذا لم تتم عملية المصادقة (للزائر أو المدير)
+    if (!user) return;
+
     const fetchProfile = async () => {
       try {
         const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
@@ -936,13 +937,9 @@ function ProfileView({ data: profileData }) {
         if (docSnap.exists()) {
           setData(docSnap.data());
           
-          // --- تسجيل الزيارة والموقع (Analytics) ---
           if (!isLogged.current) {
             isLogged.current = true;
-            
-            // محاولة تسجيل البيانات
             try {
-                // استخدام خدمة ipwho.is بدلاً من ipapi.co لتجنب مشاكل CORS
                 const res = await fetch('https://ipwho.is/');
                 const geo = await res.json();
                 const countryCode = geo.success ? geo.country_code : 'Unknown';
@@ -957,7 +954,6 @@ function ProfileView({ data: profileData }) {
                 }, { merge: true });
 
             } catch (analyticsError) {
-                // إذا فشلت عملية الكتابة (بسبب الصلاحيات أو غيرها)، نتجاهل الخطأ ونكمل العرض
                 if(analyticsError.code !== 'permission-denied') {
                     console.error("Analytics Error:", analyticsError);
                 }
@@ -976,7 +972,7 @@ function ProfileView({ data: profileData }) {
     };
 
     fetchProfile();
-  }, [profileData]);
+  }, [profileData, user]); // إضافة user إلى المصفوفة
 
   const downloadVCard = () => {
     trackClick('save_contact');
@@ -1028,7 +1024,7 @@ END:VCARD`;
 
         {/* Profile Info */}
         <div className="px-6 relative">
-          <div className="absolute top-[-112px] right-1/2 translate-x-1/2">
+          <div className="absolute -top-12 right-1/2 translate-x-1/2">
              {data.photoUrl ? (
                 <img 
                   src={data.photoUrl} 
