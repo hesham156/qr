@@ -254,10 +254,17 @@ export default function App() {
       display: "standalone",
       background_color: "#ffffff",
       theme_color: "#2563eb",
+      description: "Manage your digital business cards and share them easily.",
+      scope: "/",
       icons: [
         {
           src: "https://cdn-icons-png.flaticon.com/512/3616/3616927.png",
           sizes: "192x192",
+          type: "image/png"
+        },
+        {
+          src: "https://cdn-icons-png.flaticon.com/512/3616/3616927.png",
+          sizes: "512x512",
           type: "image/png"
         }
       ]
@@ -1120,7 +1127,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       );
   } 
   
-  // (Creative Template)
   if (template === 'creative') {
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
@@ -1148,7 +1154,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       );
   }
 
-  // (Minimal Template)
   if (template === 'minimal') {
       return (
         <div className="min-h-screen bg-white flex items-center justify-center p-4">
@@ -1181,7 +1186,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       );
   }
 
-  // (Elegant Template)
   if (template === 'elegant') {
       return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-[#f8f5f2]">
@@ -1221,7 +1225,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       );
   }
 
-  // (Professional Template)
   if (template === 'professional') {
       return (
         <div className="min-h-screen bg-slate-200 flex items-center justify-center p-4">
