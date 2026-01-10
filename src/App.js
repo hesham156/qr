@@ -249,7 +249,7 @@ export default function App() {
     // 1. Inject Manifest dynamically
     const manifest = {
       name: "Digital Cards",
-      short_name: "DigiCard",
+      short_name: "wafarle",
       start_url: ".",
       display: "standalone",
       background_color: "#ffffff",
