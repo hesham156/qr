@@ -1111,7 +1111,7 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   );
 
   const renderAvatar = () => (
-    <div className="absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full border-4 border-white shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 overflow-hidden">
+    <div className="absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full border-4 border-white shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 overflow-hidden"  style="{{top: "-120px",zIndex: "111"}}">
         {data.profileVideoUrl ? <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))}
     </div>
   );
