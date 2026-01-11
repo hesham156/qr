@@ -368,19 +368,12 @@ export default function App() {
 
   const checkRoute = (currentUser) => {
     const hashString = window.location.hash.substring(1); 
-    
     if (hashString.includes('uid=') && hashString.includes('pid=')) {
       const params = new URLSearchParams(hashString);
-      const pid = params.get('pid');
-      const uid = params.get('uid');
-      if (pid && uid) {
-        setProfileData({ id: pid, adminId: uid });
-        setViewMode('profile');
-        if (!currentUser) signInAnonymously(auth).catch(console.error);
-        return;
-      }
-    } 
-    else if (hashString && !hashString.includes('=')) {
+      setProfileData({ id: params.get('pid'), adminId: params.get('uid') });
+      setViewMode('profile');
+      if (!currentUser) signInAnonymously(auth).catch(console.error);
+    } else if (hashString && !hashString.includes('=')) {
         try {
             const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', hashString);
             getDoc(slugRef).then(slugSnap => {
@@ -391,16 +384,9 @@ export default function App() {
                     if (!currentUser) signInAnonymously(auth).catch(console.error);
                 }
             });
-            return;
-        } catch (e) {
-            console.error("Error fetching slug:", e);
-        }
-    }
-
-    if (currentUser && !currentUser.isAnonymous) {
-      setViewMode('dashboard');
+        } catch (e) { console.error(e); }
     } else {
-      setViewMode('login');
+        if (currentUser && !currentUser.isAnonymous) setViewMode('dashboard'); else setViewMode('login');
     }
   };
 
@@ -1076,41 +1062,137 @@ function StoryAnalyticsModal({ story, onClose, t }) {
     );
 }
 
+// --- Story Viewer ---
+function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLead, t }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const STORY_DURATION = 5000;
+  const viewLogged = useRef(new Set()); 
+
+  const logStoryView = async (index) => {
+    const story = stories[index];
+    if (!story || viewLogged.current.has(story.id)) return;
+    viewLogged.current.add(story.id);
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const deviceType = isMobile ? 'mobile' : 'desktop';
+    try {
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employee.id, 'stories', story.id);
+        const res = await fetch('https://ipwho.is/');
+        const geo = await res.json();
+        const countryCode = geo.success ? geo.country_code : 'Unknown';
+        await setDoc(storyRef, { stats: { views: increment(1), countries: { [countryCode]: increment(1) }, devices: { [deviceType]: increment(1) } } }, { merge: true });
+    } catch (e) { }
+  };
+
+  useEffect(() => {
+    logStoryView(currentIndex);
+    const timer = setInterval(() => {
+        setProgress(old => {
+            if (old >= 100) {
+                if (currentIndex < stories.length - 1) { setCurrentIndex(prev => prev + 1); return 0; } 
+                else { clearInterval(timer); onClose(); return 100; }
+            }
+            return old + (100 / (STORY_DURATION / 100));
+        });
+    }, 100);
+    return () => clearInterval(timer);
+  }, [currentIndex, stories.length, onClose]);
+
+  useEffect(() => { setProgress(0); }, [currentIndex]);
+
+  const handleNext = () => { if (currentIndex < stories.length - 1) setCurrentIndex(prev => prev + 1); else onClose(); };
+  const handlePrev = () => { if (currentIndex > 0) setCurrentIndex(prev => prev - 1); };
+
+  const currentStory = stories[currentIndex];
+  const linkedProduct = currentStory.productId ? products.find(p => p.id === currentStory.productId) : null;
+
+  const handleProductClick = async () => {
+      try {
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employee.id, 'stories', currentStory.id);
+        await setDoc(storyRef, { stats: { clicks: increment(1) } }, { merge: true });
+      } catch(e) {}
+      if (linkedProduct) {
+          if (linkedProduct.link) window.open(linkedProduct.link, '_blank');
+          else trackLead(linkedProduct.name);
+      }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
+       <div className="relative w-full max-w-md h-full sm:h-[90vh] bg-black sm:rounded-2xl overflow-hidden shadow-2xl">
+          <div className="absolute top-4 left-0 right-0 z-20 flex gap-1 px-2">
+              {stories.map((_, idx) => (
+                  <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-white transition-all duration-100 ease-linear" style={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' }}></div>
+                  </div>
+              ))}
+          </div>
+          <button onClick={onClose} className="absolute top-8 right-4 z-20 text-white opacity-80 hover:opacity-100"><X size={24} /></button>
+          <div className="absolute inset-0 z-10 flex"><div className="flex-1 h-full" onClick={handlePrev}></div><div className="flex-1 h-full" onClick={handleNext}></div></div>
+          {linkedProduct && (
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full px-6 pointer-events-none">
+                  <button onClick={(e) => { e.stopPropagation(); handleProductClick(); }} className="pointer-events-auto w-full bg-white/90 backdrop-blur text-black py-3 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 animate-bounce-slow">
+                      <ShoppingBag size={18} /> {t.viewProduct}: {linkedProduct.name}
+                  </button>
+              </div>
+          )}
+          <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+              {currentStory.type === 'video' ? <video src={currentStory.url} autoPlay className="w-full h-full object-contain" /> : <img src={currentStory.url} className="w-full h-full object-contain" />}
+          </div>
+       </div>
+    </div>
+  );
+}
+
+// --- Preview Modal ---
+function PreviewModal({ employee, userId, onClose, t }) {
+    const getProfileUrl = () => {
+      if (employee.slug) return `${window.location.href.split('#')[0]}#${employee.slug}`;
+      return `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
+    };
+  
+    return (
+      <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="relative w-full max-w-[380px] h-[750px] bg-black rounded-[40px] border-8 border-gray-800 shadow-2xl overflow-hidden flex flex-col">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-xl z-20"></div>
+          <div className="h-8 bg-black w-full z-10 flex justify-between items-center px-6 pt-1"><span className="text-white text-[10px]">9:41</span><div className="flex gap-1"><span className="block w-3 h-3 bg-white/20 rounded-full"></span><span className="block w-3 h-3 bg-white/20 rounded-full"></span></div></div>
+          <iframe src={getProfileUrl()} className="w-full h-full bg-white border-0" title="Card Preview" />
+          <button onClick={onClose} className="absolute top-4 right-4 z-50 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-sm"><X size={20} /></button>
+          <div className="h-6 bg-black w-full z-10 flex justify-center items-end pb-1"><div className="w-32 h-1 bg-white/30 rounded-full"></div></div>
+        </div>
+      </div>
+    );
+}
+
 // --- Profile View ---
 function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   const [data, setData] = useState(null);
   const [products, setProducts] = useState([]);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('info'); // info, products
+  const [activeTab, setActiveTab] = useState('info'); 
   const [error, setError] = useState(null);
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
-  const [leadInterest, setLeadInterest] = useState(''); // المنتج المهتم به
+  const [leadInterest, setLeadInterest] = useState(''); 
   const [showWalletModal, setShowWalletModal] = useState(null);
-  const [isStoryOpen, setIsStoryOpen] = useState(false); // حالة القصة
+  const [isStoryOpen, setIsStoryOpen] = useState(false);
   const isLogged = useRef(false);
 
-  // جلب البيانات + المنتجات + القصص
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
       try {
         const empRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
         const empSnap = await getDoc(empRef);
-        
         if (empSnap.exists()) {
           setData(empSnap.data());
-          setLoading(false); // تحسين الأداء: إخفاء التحميل فوراً عند جلب البيانات الأساسية
-
-          // جلب المنتجات
+          setLoading(false); 
           const prodRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'products');
           getDocs(prodRef).then((prodSnap) => {
               const prods = [];
               prodSnap.forEach(d => prods.push({id: d.id, ...d.data()}));
               setProducts(prods);
           });
-
-          // جلب القصص
           const storyRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'stories');
           getDocs(storyRef).then((storySnap) => {
               const storyList = [];
@@ -1118,8 +1200,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
               storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
               setStories(storyList);
           });
-
-          // تسجيل التحليلات (مرة واحدة)
           if (!isLogged.current) {
             isLogged.current = true;
             try {
@@ -1132,7 +1212,7 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
                 await setDoc(empRef, {
                     stats: { views: increment(1), countries: { [countryCode]: increment(1) }, heatmap: { [locationKey]: increment(1) } }
                 }, { merge: true });
-            } catch (e) { /* ignore */ }
+            } catch (e) { }
           }
         } else {
           setError('لم يتم العثور على البطاقة');
@@ -1150,23 +1230,19 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
     try {
         const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
         await setDoc(docRef, { stats: { clicks: { [action]: increment(1) } } }, { merge: true });
-    } catch (e) { /* ignore */ }
+    } catch (e) { }
   };
 
   const handleBuyProduct = (prod) => {
       trackClick(`buy_${prod.name}`);
-      if (prod.link) {
-          window.open(prod.link, '_blank');
-      } else {
-          setLeadInterest(`${t.orderInterest} ${prod.name}`);
-          setIsLeadFormOpen(true);
-      }
+      if (prod.link) window.open(prod.link, '_blank');
+      else { setLeadInterest(`${t.orderInterest} ${prod.name}`); setIsLeadFormOpen(true); }
   };
 
   const handleStoryAction = (productName) => {
-      setIsStoryOpen(false); // إغلاق القصص
+      setIsStoryOpen(false); 
       setLeadInterest(`${t.orderInterest} ${productName}`);
-      setIsLeadFormOpen(true); // فتح الفورم
+      setIsLeadFormOpen(true);
   };
 
   const downloadVCard = () => {
@@ -1194,7 +1270,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
           <div className="mt-16 text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
             <p className="font-medium" style={{ color: themeColor }}>{data.jobTitle} {data.company && `| ${data.company}`}</p>
-            {/* Socials */}
             <div className="flex justify-center gap-3 mt-4 mb-4 flex-wrap">
                 {data.facebook && <a href={data.facebook} target="_blank" onClick={() => trackClick('facebook')} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Facebook size={20} /></a>}
                 {data.twitter && <a href={data.twitter} target="_blank" onClick={() => trackClick('twitter')} className="p-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"><Twitter size={20} /></a>}
@@ -1203,7 +1278,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
                 {data.youtube && <a href={data.youtube} target="_blank" onClick={() => trackClick('youtube')} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"><Youtube size={20} /></a>}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3 mb-6">
             <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Phone size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.call}</span></a>
             <a href={`https://wa.me/${data.whatsapp}`} target="_blank" onClick={() => trackClick('whatsapp')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><MessageCircle size={20} className="text-emerald-500" /> <span className="font-bold">{t.whatsapp}</span></a>
@@ -1214,19 +1288,13 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
             <button onClick={() => setShowWalletModal('google')} className="col-span-1 flex items-center justify-center gap-2 bg-white text-black border border-slate-200 p-3 rounded-xl hover:bg-slate-50"><CreditCard size={20} className="text-blue-500" /><span className="font-bold text-xs">Google</span></button>
             {data.cvUrl && <a href={data.cvUrl} target="_blank" onClick={() => trackClick('download_cv')} className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><FileText size={20} className="text-orange-500" /> <span className="font-bold">{t.downloadCv}</span></a>}
           </div>
-
           <button onClick={downloadVCard} className="w-full text-white p-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mb-8 transform active:scale-95" style={{ backgroundColor: themeColor }}><UserPlus size={20} /> {t.saveContact}</button>
       </div>
   );
 
   const renderProductsTab = () => (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 pb-8">
-          {products.length === 0 ? (
-              <div className="text-center text-slate-400 py-10">
-                  <ShoppingBag size={48} className="mx-auto mb-2 opacity-20" />
-                  <p>{t.noProducts}</p>
-              </div>
-          ) : (
+          {products.length === 0 ? <div className="text-center text-slate-400 py-10"><ShoppingBag size={48} className="mx-auto mb-2 opacity-20" /><p>{t.noProducts}</p></div> : 
               <div className="grid grid-cols-1 gap-4">
                   {products.map(prod => (
                       <div key={prod.id} className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 flex flex-col">
@@ -1237,19 +1305,12 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
                           <div className="p-4 flex-1 flex flex-col">
                               <h3 className="font-bold text-slate-800 text-lg mb-1">{prod.name}</h3>
                               <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{prod.description}</p>
-                              <button 
-                                onClick={() => handleBuyProduct(prod)}
-                                className="w-full py-2.5 rounded-lg text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: themeColor }}
-                              >
-                                {prod.link ? <ExternalLink size={16}/> : <ShoppingCart size={16}/>}
-                                {t.buy}
-                              </button>
+                              <button onClick={() => handleBuyProduct(prod)} className="w-full py-2.5 rounded-lg text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity" style={{ backgroundColor: themeColor }}>{prod.link ? <ExternalLink size={16}/> : <ShoppingCart size={16}/>}{t.buy}</button>
                           </div>
                       </div>
                   ))}
               </div>
-          )}
+          }
       </div>
   );
 
@@ -1260,21 +1321,13 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
     </div>
   );
 
-  // تحديث الصورة الشخصية لدعم حلقة القصص
   const renderAvatar = () => {
     const hasStories = stories.length > 0;
     const ringClass = hasStories ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600" : "border-4 border-white";
-    
     return (
-        <div 
-            className={`absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`}
-            onClick={() => { if(hasStories) setIsStoryOpen(true); }}
-        >
+        <div className={`absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`} onClick={() => { if(hasStories) setIsStoryOpen(true); }}>
             <div className="w-full h-full rounded-full overflow-hidden border-2 border-white bg-white">
-                {data.profileVideoUrl ? 
-                    <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : 
-                    (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))
-                }
+                {data.profileVideoUrl ? <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))}
             </div>
         </div>
     );
@@ -1283,26 +1336,17 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative">
        <button onClick={toggleLang} className="absolute top-4 right-4 z-50 bg-white px-3 py-2 rounded-full shadow-md text-slate-600 hover:text-blue-600 font-bold text-xs"><Globe size={16} /> {lang === 'ar' ? 'English' : 'عربي'}</button>
-       
        <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative min-h-[80vh] flex flex-col">
           {renderHeader()}
-          
-          {/* Tabs */}
           {products.length > 0 && (
               <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
                   <button onClick={() => setActiveTab('info')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabInfo}</button>
                   <button onClick={() => setActiveTab('products')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'products' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabProducts}</button>
               </div>
           )}
-
-          <div className="px-6 relative flex-1">
-             {activeTab === 'info' && renderAvatar()}
-             {activeTab === 'info' ? renderInfoTab() : renderProductsTab()}
-          </div>
-          
+          <div className="px-6 relative flex-1">{activeTab === 'info' && renderAvatar()}{activeTab === 'info' ? renderInfoTab() : renderProductsTab()}</div>
           <div className="bg-slate-50 py-4 text-center text-slate-400 text-xs mt-auto">Digital Card System © 2024</div>
        </div>
-
       {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} t={t} initialInterest={leadInterest} />}
       {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} t={t} />}
       {isStoryOpen && stories.length > 0 && <StoryViewer stories={stories} adminId={profileData.adminId} employeeId={profileData.id} onClose={() => setIsStoryOpen(false)} products={products} trackLead={handleStoryAction} t={t} />}
