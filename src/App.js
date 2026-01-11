@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc, getDocs } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart } from 'lucide-react';
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon } from 'lucide-react';
 
 // --- تهيئة Firebase ---
 let firebaseConfig;
@@ -146,6 +146,17 @@ const translations = {
     tabInfo: 'المعلومات',
     tabProducts: 'المنتجات',
     orderInterest: 'مهتم بمنتج: ',
+    storiesTitle: 'القصص (Stories)',
+    manageStories: 'إدارة القصص',
+    addStory: 'إضافة قصة',
+    storyUrl: 'رابط الصورة/الفيديو',
+    storyType: 'النوع',
+    typeImage: 'صورة',
+    typeVideo: 'فيديو',
+    noStories: 'لا توجد قصص',
+    linkProduct: 'ربط بمنتج (اختياري)',
+    selectProduct: 'اختر منتجاً...',
+    viewProduct: 'عرض المنتج',
   },
   en: {
     loading: 'Loading...',
@@ -255,6 +266,17 @@ const translations = {
     tabInfo: 'Info',
     tabProducts: 'Products',
     orderInterest: 'Interested in: ',
+    storiesTitle: 'Stories',
+    manageStories: 'Manage Stories',
+    addStory: 'Add Story',
+    storyUrl: 'Image/Video URL',
+    storyType: 'Type',
+    typeImage: 'Image',
+    typeVideo: 'Video',
+    noStories: 'No stories',
+    linkProduct: 'Link Product (Optional)',
+    selectProduct: 'Select a product...',
+    viewProduct: 'View Product',
   }
 };
 
@@ -557,6 +579,7 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
   const [productManagerEmployee, setProductManagerEmployee] = useState(null);
+  const [storiesManagerEmployee, setStoriesManagerEmployee] = useState(null); // جديد
 
   useEffect(() => {
     if (!user) return;
@@ -689,6 +712,7 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
                 onShowLeads={() => setLeadsEmployee(emp)}
                 onPreview={() => setPreviewEmployee(emp)} 
                 onManageProducts={() => setProductManagerEmployee(emp)}
+                onManageStories={() => setStoriesManagerEmployee(emp)} // جديد
                 t={t}
               />
             ))}
@@ -748,12 +772,21 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
           t={t}
         />
       )}
+
+      {storiesManagerEmployee && (
+        <StoriesManagerModal
+          userId={user.uid}
+          employee={storiesManagerEmployee}
+          onClose={() => setStoriesManagerEmployee(null)}
+          t={t}
+        />
+      )}
     </div>
   );
 }
 
 // --- بطاقة الموظف في القائمة ---
-function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads, onPreview, onManageProducts, userId, t }) {
+function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads, onPreview, onManageProducts, onManageStories, userId, t }) {
   const themeColor = employee.themeColor || '#2563eb';
   const views = employee.stats?.views || 0;
   const isCompany = employee.profileType === 'company';
@@ -825,14 +858,23 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
         </div>
       </div>
       
-      {/* زر إدارة المنتجات */}
-      <button 
-        onClick={onManageProducts}
-        className="w-full mb-2 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-colors"
-      >
-        <ShoppingBag size={16} />
-        {t.manageProducts}
-      </button>
+      {/* أزرار الإدارة الإضافية */}
+      <div className="flex gap-2 mb-2">
+        <button 
+          onClick={onManageProducts}
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-colors"
+        >
+          <ShoppingBag size={14} />
+          {t.manageProducts}
+        </button>
+        <button 
+          onClick={onManageStories}
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold border border-slate-200 text-pink-600 hover:bg-pink-50 transition-colors"
+        >
+          <CircleDashed size={14} />
+          {t.manageStories}
+        </button>
+      </div>
 
       <div className="grid grid-cols-4 gap-2">
         <button onClick={onShowAnalytics} className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors" title={t.stats}><BarChart3 size={16} /></button>
@@ -844,7 +886,7 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
   );
 }
 
-// --- نافذة إدارة المنتجات (جديد) ---
+// --- نافذة إدارة المنتجات ---
 function ProductsManagerModal({ userId, employee, onClose, t }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -942,19 +984,291 @@ function ProductsManagerModal({ userId, employee, onClose, t }) {
   );
 }
 
-// --- صفحة البروفايل (محدثة مع التبويبات) ---
+// --- نافذة إدارة القصص (المحدثة) ---
+function StoriesManagerModal({ userId, employee, onClose, t }) {
+  const [stories, setStories] = useState([]);
+  const [products, setProducts] = useState([]); // قائمة المنتجات
+  const [newStory, setNewStory] = useState({ url: '', type: 'image', productId: '' }); // productId مضاف
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    // جلب القصص
+    const qStories = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
+    const unsubStories = onSnapshot(qStories, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setStories(data);
+    });
+
+    // جلب المنتجات للقائمة المنسدلة
+    const qProducts = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
+    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
+       const data = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, link: doc.data().link, price: doc.data().price }));
+       setProducts(data);
+    });
+
+    return () => {
+        unsubStories();
+        unsubProducts();
+    };
+  }, [userId, employee.id]);
+
+  const handleAddStory = async (e) => {
+    e.preventDefault();
+    setIsAdding(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories'), {
+        ...newStory,
+        createdAt: serverTimestamp(),
+        // حقول الإحصائيات الأولية
+        stats: { views: 0, clicks: 0, countries: {} }
+      });
+      setNewStory({ url: '', type: 'image', productId: '' });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleDeleteStory = async (storyId) => {
+    if (window.confirm('Delete story?')) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories', storyId));
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white z-10">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <CircleDashed size={20} className="text-pink-600" />
+            {t.storiesTitle}: {employee.name}
+          </h2>
+          <button onClick={onClose}><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+           <form onSubmit={handleAddStory} className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Plus size={16}/> {t.addStory}</h3>
+              <div className="flex gap-2 mb-3">
+                  <input required value={newStory.url} onChange={e => setNewStory({...newStory, url: e.target.value})} className="flex-1 px-3 py-2 border rounded-lg text-sm dir-ltr" placeholder={t.storyUrl} dir="ltr" />
+                  <select value={newStory.type} onChange={e => setNewStory({...newStory, type: e.target.value})} className="px-3 py-2 border rounded-lg text-sm bg-white">
+                      <option value="image">{t.typeImage}</option>
+                      <option value="video">{t.typeVideo}</option>
+                  </select>
+              </div>
+              
+              {/* اختيار المنتج */}
+              <div className="mb-3">
+                  <select 
+                    value={newStory.productId} 
+                    onChange={e => setNewStory({...newStory, productId: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                  >
+                      <option value="">{t.linkProduct}</option>
+                      {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.price ? p.price : ''})</option>
+                      ))}
+                  </select>
+              </div>
+
+              <button type="submit" disabled={isAdding} className="w-full bg-pink-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50">
+                  {isAdding ? t.saving : t.save}
+              </button>
+           </form>
+
+           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {stories.map(story => (
+                  <div key={story.id} className="relative aspect-[9/16] rounded-xl overflow-hidden group border border-slate-200 bg-black">
+                      {story.type === 'video' ? 
+                        <video src={story.url} className="w-full h-full object-cover" /> :
+                        <img src={story.url} className="w-full h-full object-cover" />
+                      }
+                      
+                      {/* طبقة الإحصائيات على القصة */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-2">
+                          <div className="flex items-center gap-1 mb-1"><Eye size={14}/> <span>{story.stats?.views || 0}</span></div>
+                          <div className="flex items-center gap-1"><MousePointerClick size={14}/> <span>{story.stats?.clicks || 0}</span></div>
+                          {story.productId && <div className="mt-2 text-xs bg-indigo-600 px-2 py-0.5 rounded">Product</div>}
+                      </div>
+
+                      <button onClick={() => handleDeleteStory(story.id)} className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <Trash2 size={14} />
+                      </button>
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded-md backdrop-blur-sm">
+                         {story.type === 'video' ? <Video size={10} /> : <ImageIcon size={10} />}
+                      </div>
+                  </div>
+              ))}
+              {stories.length === 0 && <div className="col-span-full text-center text-slate-400 py-8">{t.noStories}</div>}
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- عارض القصص (المحدث مع المنتجات والإحصائيات) ---
+function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLead, t }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const STORY_DURATION = 5000;
+  const viewLogged = useRef(new Set()); // لمنع تكرار تسجيل المشاهدة لنفس القصة في نفس الجلسة
+
+  // دالة لتسجيل مشاهدة القصة
+  const logStoryView = async (index) => {
+    const story = stories[index];
+    if (!story || viewLogged.current.has(story.id)) return;
+    
+    viewLogged.current.add(story.id);
+    
+    try {
+        // تحديث إحصائيات القصة في Firestore
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', story.id);
+        
+        // الحصول على الدولة (مرة واحدة للجلسة أو لكل قصة إذا أردنا دقة عالية)
+        const res = await fetch('https://ipwho.is/');
+        const geo = await res.json();
+        const countryCode = geo.success ? geo.country_code : 'Unknown';
+
+        await setDoc(storyRef, {
+            stats: {
+                views: increment(1),
+                countries: {
+                    [countryCode]: increment(1)
+                }
+            }
+        }, { merge: true });
+    } catch (e) {
+        console.warn("Analytics error", e);
+    }
+  };
+
+  useEffect(() => {
+    // تسجيل مشاهدة القصة الحالية
+    logStoryView(currentIndex);
+
+    const timer = setInterval(() => {
+        setProgress(old => {
+            if (old >= 100) {
+                if (currentIndex < stories.length - 1) {
+                    setCurrentIndex(prev => prev + 1);
+                    return 0;
+                } else {
+                    clearInterval(timer);
+                    onClose();
+                    return 100;
+                }
+            }
+            return old + (100 / (STORY_DURATION / 100));
+        });
+    }, 100);
+    return () => clearInterval(timer);
+  }, [currentIndex, stories.length, onClose]);
+
+  useEffect(() => {
+      setProgress(0);
+  }, [currentIndex]);
+
+  const handleNext = () => {
+      if (currentIndex < stories.length - 1) setCurrentIndex(prev => prev + 1);
+      else onClose();
+  };
+
+  const handlePrev = () => {
+      if (currentIndex > 0) setCurrentIndex(prev => prev - 1);
+  };
+
+  const currentStory = stories[currentIndex];
+  // البحث عن المنتج المرتبط
+  const linkedProduct = currentStory.productId ? products.find(p => p.id === currentStory.productId) : null;
+
+  const handleProductClick = async () => {
+      // تسجيل النقرة في إحصائيات القصة
+      try {
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', currentStory.id);
+        await setDoc(storyRef, { stats: { clicks: increment(1) } }, { merge: true });
+      } catch(e) {}
+
+      // تنفيذ الأكشن
+      if (linkedProduct) {
+          if (linkedProduct.link) {
+              window.open(linkedProduct.link, '_blank');
+          } else {
+              // فتح نموذج الـ Lead (نمرر البيانات للأب ليفتح المودال)
+              trackLead(linkedProduct.name);
+          }
+      }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
+       <div className="relative w-full max-w-md h-full sm:h-[90vh] bg-black sm:rounded-2xl overflow-hidden shadow-2xl">
+          {/* Progress Bars */}
+          <div className="absolute top-4 left-0 right-0 z-20 flex gap-1 px-2">
+              {stories.map((_, idx) => (
+                  <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-white transition-all duration-100 ease-linear"
+                        style={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' }}
+                      ></div>
+                  </div>
+              ))}
+          </div>
+
+          {/* Close Button */}
+          <button onClick={onClose} className="absolute top-8 right-4 z-20 text-white opacity-80 hover:opacity-100">
+              <X size={24} />
+          </button>
+
+          {/* Navigation Overlay */}
+          <div className="absolute inset-0 z-10 flex">
+              <div className="flex-1 h-full" onClick={handlePrev}></div>
+              <div className="flex-1 h-full" onClick={handleNext}></div>
+          </div>
+
+          {/* Product Overlay (Action Button) */}
+          {linkedProduct && (
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full px-6 pointer-events-none">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleProductClick(); }}
+                    className="pointer-events-auto w-full bg-white/90 backdrop-blur text-black py-3 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 animate-bounce-slow"
+                  >
+                      <ShoppingBag size={18} />
+                      {t.viewProduct}: {linkedProduct.name}
+                  </button>
+              </div>
+          )}
+
+          {/* Content */}
+          <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+              {currentStory.type === 'video' ? (
+                  <video src={currentStory.url} autoPlay className="w-full h-full object-contain" />
+              ) : (
+                  <img src={currentStory.url} className="w-full h-full object-contain" />
+              )}
+          </div>
+       </div>
+    </div>
+  );
+}
+
+// --- صفحة البروفايل (محدثة مع التبويبات والقصص) ---
 function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   const [data, setData] = useState(null);
   const [products, setProducts] = useState([]);
+  const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('info'); // info, products
   const [error, setError] = useState(null);
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [leadInterest, setLeadInterest] = useState(''); // المنتج المهتم به
   const [showWalletModal, setShowWalletModal] = useState(null);
+  const [isStoryOpen, setIsStoryOpen] = useState(false); // حالة القصة
   const isLogged = useRef(false);
 
-  // جلب البيانات + المنتجات
+  // جلب البيانات + المنتجات + القصص
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
@@ -971,6 +1285,15 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
           const prods = [];
           prodSnap.forEach(d => prods.push({id: d.id, ...d.data()}));
           setProducts(prods);
+
+          // جلب القصص
+          const storyRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'stories');
+          const storySnap = await import('firebase/firestore').then(mod => mod.getDocs(storyRef));
+          const storyList = [];
+          storySnap.forEach(d => storyList.push({id: d.id, ...d.data()}));
+          // ترتيب القصص
+          storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+          setStories(storyList);
 
           // تسجيل التحليلات (مرة واحدة)
           if (!isLogged.current) {
@@ -1016,7 +1339,12 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       }
   };
 
-  // ... (نفس دالة downloadVCard)
+  const handleStoryAction = (productName) => {
+      setIsStoryOpen(false); // إغلاق القصص
+      setLeadInterest(`${t.orderInterest} ${productName}`);
+      setIsLeadFormOpen(true); // فتح الفورم
+  };
+
   const downloadVCard = () => {
     trackClick('save_contact');
     if (!data) return;
@@ -1037,7 +1365,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   const themeColor = data.themeColor || '#2563eb';
   const template = data.template || 'classic';
 
-  // --- محتوى التبويبات ---
   const renderInfoTab = () => (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="mt-16 text-center mb-8">
@@ -1102,7 +1429,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       </div>
   );
 
-  // --- الهيكل الرئيسي للعرض ---
   const renderHeader = () => (
     <div className="h-32 relative" style={{ background: `linear-gradient(to right, ${themeColor}, #1e293b)` }}>
        <div className="absolute top-0 right-0 w-full h-full opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
@@ -1110,11 +1436,25 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
     </div>
   );
 
-  const renderAvatar = () => (
-    <div className="absolute right-1/2 top-[-123px] z-40 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full border-4 border-white shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 overflow-hidden">
-        {data.profileVideoUrl ? <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))}
-    </div>
-  );
+  // تحديث الصورة الشخصية لدعم حلقة القصص
+  const renderAvatar = () => {
+    const hasStories = stories.length > 0;
+    const ringClass = hasStories ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600" : "border-4 border-white";
+    
+    return (
+        <div 
+            className={`absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`}
+            onClick={() => { if(hasStories) setIsStoryOpen(true); }}
+        >
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-white bg-white">
+                {data.profileVideoUrl ? 
+                    <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : 
+                    (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))
+                }
+            </div>
+        </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative">
@@ -1141,60 +1481,7 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
 
       {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} t={t} initialInterest={leadInterest} />}
       {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} t={t} />}
-    </div>
-  );
-}
-
-// --- تحديث LeadCaptureModal لدعم الاهتمام بمنتج ---
-function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess, t, initialInterest }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
-        name,
-        phone,
-        interest: initialInterest || 'General Contact', // تسجيل المنتج المهتم به
-        createdAt: serverTimestamp()
-      });
-      setSubmitted(true);
-      if (onSuccess) onSuccess();
-      setTimeout(onClose, 2000);
-    } catch (error) {
-      window.alert("Error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
-        {submitted ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><UserPlus size={32} /></div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">{t.sentSuccess}</h3>
-            <p className="text-slate-500">{t.sentMsg}</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-slate-800">{initialInterest ? t.buy : t.exchangeContact}</h3>
-                {initialInterest && <p className="text-sm font-bold text-indigo-600 bg-indigo-50 p-2 rounded mt-2">{initialInterest}</p>}
-                <p className="text-sm text-slate-500 mt-1">{t.shareData}</p>
-            </div>
-            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={t.leadName} />
-            <input type="tel" required dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.leadPhone} />
-            <button type="submit" disabled={loading} className="w-full text-white font-bold py-3 rounded-xl" style={{ backgroundColor: themeColor }}>{loading ? '...' : t.send}</button>
-          </form>
-        )}
-      </div>
+      {isStoryOpen && stories.length > 0 && <StoryViewer stories={stories} adminId={profileData.adminId} employeeId={profileData.id} onClose={() => setIsStoryOpen(false)} products={products} trackLead={handleStoryAction} t={t} />}
     </div>
   );
 }
@@ -1228,7 +1515,6 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
     
     try {
       const collectionRef = collection(db, 'artifacts', appId, 'users', userId, 'employees');
-      
       let empId = initialData?.id;
       let oldSlug = initialData?.slug;
       
@@ -1365,8 +1651,54 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
   );
 }
 
-// ... (بقية المكونات المساعدة: WalletPreviewModal, QRModal, LeadsListModal, AnalyticsModal, PreviewModal) ...
-// (يتم الاحتفاظ ببقية المكونات المساعدة كما هي في الكود السابق)
+// --- المكونات المساعدة ---
+function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess, t }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
+        name,
+        phone,
+        createdAt: serverTimestamp()
+      });
+      setSubmitted(true);
+      if (onSuccess) onSuccess();
+      setTimeout(onClose, 2000);
+    } catch (error) {
+      window.alert("Error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        {submitted ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><UserPlus size={32} /></div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">{t.sentSuccess}</h3>
+            <p className="text-slate-500">{t.sentMsg}</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="text-center mb-6"><h3 className="text-xl font-bold text-slate-800">{t.exchangeContact}</h3><p className="text-sm text-slate-500 mt-1">{t.shareData}</p></div>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={t.leadName} />
+            <input type="tel" required dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.leadPhone} />
+            <button type="submit" disabled={loading} className="w-full text-white font-bold py-3 rounded-xl" style={{ backgroundColor: themeColor }}>{loading ? '...' : t.send}</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function WalletPreviewModal({ type, data, onClose, t }) {
   const isApple = type === 'apple';
