@@ -133,7 +133,7 @@ const translations = {
     alertMsg: 'يرجى التأكد من صلاحيات Firestore Rules.',
     installApp: 'تثبيت التطبيق',
     productsTitle: 'المنتجات والخدمات',
-    manageProducts: 'إدارة المنتجات',
+    manageProducts: 'المنتجات',
     addProduct: 'إضافة منتج',
     prodName: 'اسم المنتج',
     prodPrice: 'السعر',
@@ -147,7 +147,7 @@ const translations = {
     tabProducts: 'المنتجات',
     orderInterest: 'مهتم بمنتج: ',
     storiesTitle: 'القصص (Stories)',
-    manageStories: 'إدارة القصص',
+    manageStories: 'القصص',
     addStory: 'إضافة قصة',
     storyUrl: 'رابط الصورة/الفيديو',
     storyType: 'النوع',
@@ -297,182 +297,67 @@ const translations = {
 // --- المكون الرئيسي ---
 export default function App() {
   const [user, setUser] = useState(null);
-  const [viewMode, setViewMode] = useState('loading'); // loading, login, dashboard, profile
+  const [viewMode, setViewMode] = useState('loading');
   const [profileData, setProfileData] = useState({ id: null, adminId: null });
   const [lang, setLang] = useState('ar'); 
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  
   const t = translations[lang]; 
 
-  const toggleLang = () => {
-    setLang(prev => prev === 'ar' ? 'en' : 'ar');
-  };
+  const toggleLang = () => { setLang(prev => prev === 'ar' ? 'en' : 'ar'); };
   
   // PWA Initialization
   useEffect(() => {
-    // 1. Inject Manifest dynamically
-    const manifest = {
-      name: "Digital Cards",
-      short_name: "DigiCard",
-      start_url: ".",
-      display: "standalone",
-      background_color: "#ffffff",
-      theme_color: "#2563eb",
-      description: "Manage your digital business cards and share them easily.",
-      scope: "/",
-      icons: [
-        {
-          src: "https://cdn-icons-png.flaticon.com/512/3616/3616927.png",
-          sizes: "192x192",
-          type: "image/png"
-        },
-        {
-          src: "https://cdn-icons-png.flaticon.com/512/3616/3616927.png",
-          sizes: "512x512",
-          type: "image/png"
-        }
-      ]
-    };
-    const stringManifest = JSON.stringify(manifest);
-    const blob = new Blob([stringManifest], {type: 'application/json'});
-    const manifestURL = URL.createObjectURL(blob);
-    let link = document.querySelector("link[rel*='manifest']");
-    if (!link) {
-        link = document.createElement('link');
-        link.rel = 'manifest';
-        document.head.appendChild(link);
-    }
-    link.href = manifestURL;
+    const manifest = { name: "Digital Cards", short_name: "DigiCard", start_url: ".", display: "standalone", background_color: "#ffffff", theme_color: "#2563eb", icons: [{ src: "https://cdn-icons-png.flaticon.com/512/3616/3616927.png", sizes: "192x192", type: "image/png" }] };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob); document.head.appendChild(link);
 
-    // 2. Handle Install Prompt
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
+    const handleBeforeInstallPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
-  const handleInstallClick = () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult) => {
-        if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the install prompt');
-        }
-        setDeferredPrompt(null);
-      });
-    }
-  };
+  const handleInstallClick = () => { if (deferredPrompt) { deferredPrompt.prompt(); setDeferredPrompt(null); } };
 
   const checkRoute = (currentUser) => {
     const hashString = window.location.hash.substring(1); 
-    
-    // 1. الرابط الافتراضي
     if (hashString.includes('uid=') && hashString.includes('pid=')) {
       const params = new URLSearchParams(hashString);
-      const pid = params.get('pid');
-      const uid = params.get('uid');
-      if (pid && uid) {
-        setProfileData({ id: pid, adminId: uid });
-        setViewMode('profile');
-        if (!currentUser) signInAnonymously(auth).catch(console.error);
-        return;
-      }
-    } 
-    // 2. الرابط المختصر (Slug)
-    else if (hashString && !hashString.includes('=')) {
+      setProfileData({ id: params.get('pid'), adminId: params.get('uid') });
+      setViewMode('profile');
+      if (!currentUser) signInAnonymously(auth).catch(console.error);
+    } else if (hashString && !hashString.includes('=')) {
         try {
-            const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', hashString);
-            getDoc(slugRef).then(slugSnap => {
+            getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', hashString)).then(slugSnap => {
                 if (slugSnap.exists()) {
-                    const data = slugSnap.data();
-                    setProfileData({ id: data.targetEmpId, adminId: data.targetUid });
+                    setProfileData({ id: slugSnap.data().targetEmpId, adminId: slugSnap.data().targetUid });
                     setViewMode('profile');
                     if (!currentUser) signInAnonymously(auth).catch(console.error);
                 }
             });
-            return;
-        } catch (e) {
-            console.error("Error fetching slug:", e);
-        }
-    }
-
-    // 3. التوجيه الافتراضي
-    if (currentUser && !currentUser.isAnonymous) {
-      setViewMode('dashboard');
+        } catch (e) { console.error(e); }
     } else {
-      setViewMode('login');
+        if (currentUser && !currentUser.isAnonymous) setViewMode('dashboard'); else setViewMode('login');
     }
   };
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (initialAuthToken) {
-          await signInWithCustomToken(auth, initialAuthToken);
-        }
-      } catch (error) {
-        console.error("Auth Error:", error);
-      }
-    };
-    
+    const initAuth = async () => { if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken); };
     initAuth();
-    
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      checkRoute(currentUser);
-    });
-
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => { setUser(currentUser); checkRoute(currentUser); });
     const onHashChange = () => checkRoute(auth.currentUser);
     window.addEventListener('hashchange', onHashChange);
-
-    return () => {
-      unsubscribeAuth();
-      window.removeEventListener('hashchange', onHashChange);
-    };
+    return () => { unsubscribeAuth(); window.removeEventListener('hashchange', onHashChange); };
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setViewMode('login');
-    } catch (error) {
-      console.error("Logout Error:", error);
-    }
-  };
+  const handleLogout = async () => { await signOut(auth); setViewMode('login'); };
 
-  if (viewMode === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-500 font-medium">{t.loading}</p>
-        </div>
-      </div>
-    );
-  }
+  if (viewMode === 'loading') return <div className="flex items-center justify-center min-h-screen bg-slate-50"><p>{t.loading}</p></div>;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {viewMode === 'profile' ? (
-        <ProfileView data={profileData} user={user} lang={lang} toggleLang={toggleLang} t={t} />
-      ) : viewMode === 'login' ? (
-        <LoginView lang={lang} toggleLang={toggleLang} t={t} />
-      ) : (
-        <Dashboard 
-            user={user} 
-            onLogout={handleLogout} 
-            lang={lang} 
-            toggleLang={toggleLang} 
-            t={t}
-            installPrompt={deferredPrompt}
-            onInstall={handleInstallClick} 
-        />
-      )}
+      {viewMode === 'profile' ? <ProfileView data={profileData} user={user} lang={lang} toggleLang={toggleLang} t={t} /> : 
+       viewMode === 'login' ? <LoginView lang={lang} toggleLang={toggleLang} t={t} /> : 
+       <Dashboard user={user} onLogout={handleLogout} lang={lang} toggleLang={toggleLang} t={t} installPrompt={deferredPrompt} onInstall={handleInstallClick} />}
     </div>
   );
 }
@@ -486,97 +371,23 @@ function LoginView({ lang, toggleLang, t }) {
   const [isRegistering, setIsRegistering] = useState(false);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-    } catch (err) {
-      console.error(err);
-      setError('حدث خطأ: ' + err.code);
-    } finally {
-      setLoading(false);
-    }
+    e.preventDefault(); setLoading(true); setError('');
+    try { isRegistering ? await createUserWithEmailAndPassword(auth, email, password) : await signInWithEmailAndPassword(auth, email, password); } 
+    catch (err) { setError(err.code); } finally { setLoading(false); }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-100 relative">
-      <button onClick={toggleLang} className="absolute top-4 right-4 flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm text-slate-600 hover:text-blue-600">
-        <Languages size={18} />
-        <span className="text-sm font-bold uppercase">{lang === 'ar' ? 'English' : 'عربي'}</span>
-      </button>
-
+      <button onClick={toggleLang} className="absolute top-4 right-4 flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm"><Languages size={18} /> <span className="text-sm font-bold uppercase">{lang === 'ar' ? 'English' : 'عربي'}</span></button>
       <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-xl">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Lock size={32} />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            {isRegistering ? t.registerTitle : t.loginTitle}
-          </h1>
-          <p className="text-slate-500 mt-2">
-            {isRegistering ? t.registerSubtitle : t.loginSubtitle}
-          </p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm flex items-center gap-2">
-            <AlertCircle size={16} />
-            {error}
-          </div>
-        )}
-
+        <h1 className="text-2xl font-bold text-center mb-8">{isRegistering ? t.registerTitle : t.loginTitle}</h1>
+        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.email}</label>
-            <input 
-              type="email" 
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="admin@company.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.password}</label>
-            <input 
-              type="password" 
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="••••••••"
-              minLength={6}
-            />
-          </div>
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 mt-4 flex items-center justify-center"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              isRegistering ? t.registerBtn : t.loginBtn
-            )}
-          </button>
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-3 rounded-lg border" placeholder={t.email} />
+          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 rounded-lg border" placeholder={t.password} />
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">{loading ? '...' : (isRegistering ? t.registerBtn : t.loginBtn)}</button>
         </form>
-        
-        <div className="mt-6 text-center">
-          <button 
-            type="button"
-            onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
-            className="text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium"
-          >
-            {isRegistering ? t.haveAccount : t.noAccount}
-          </button>
-        </div>
+        <div className="mt-6 text-center"><button onClick={() => setIsRegistering(!isRegistering)} className="text-sm text-blue-600 hover:underline">{isRegistering ? t.haveAccount : t.noAccount}</button></div>
       </div>
     </div>
   );
@@ -585,179 +396,71 @@ function LoginView({ lang, toggleLang, t }) {
 // --- لوحة التحكم ---
 function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInstall }) {
   const [employees, setEmployees] = useState([]);
-  const [managingEmployee, setManagingEmployee] = useState(null); // The employee currently being managed
-  const [isFormOpen, setIsFormOpen] = useState(false); // Only for creating new
+  const [managingEmployee, setManagingEmployee] = useState(null); 
+  const [isFormOpen, setIsFormOpen] = useState(false); 
   const [previewEmployee, setPreviewEmployee] = useState(null);
 
   useEffect(() => {
     if (!user) return;
-    
-    const q = collection(db, 'artifacts', appId, 'users', user.uid, 'employees');
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setEmployees(docs);
+    return onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'employees'), (snapshot) => {
+      setEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
     });
-
-    return () => unsubscribe();
   }, [user]);
 
   const handleDelete = async (emp) => {
     if (window.confirm(t.deleteConfirm)) {
-      try {
-        if (emp.slug) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', emp.slug));
-        }
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', emp.id));
-      } catch (e) {
-        console.error("Error deleting:", e);
-        window.alert(t.deleteError);
-      }
+      if (emp.slug) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', emp.slug));
+      await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', emp.id));
     }
   };
 
-  // If we are managing an employee, show the Manager View
   if (managingEmployee) {
-    return (
-        <EmployeeManager 
-            userId={user.uid} 
-            employee={managingEmployee} 
-            onBack={() => setManagingEmployee(null)} 
-            t={t}
-            lang={lang}
-        />
-    );
+    return <EmployeeManager userId={user.uid} employee={managingEmployee} onBack={() => setManagingEmployee(null)} t={t} lang={lang} />;
   }
 
   return (
     <div className="pb-20">
       <header className="bg-white shadow-sm sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-800">{t.dashboardTitle}</h1>
           <div className="flex items-center gap-2">
-            <div className="bg-blue-600 text-white p-2 rounded-lg">
-              <UserPlus size={20} />
-            </div>
-            <h1 className="text-xl font-bold text-slate-800 hidden sm:block">{t.dashboardTitle}</h1>
-            <h1 className="text-xl font-bold text-slate-800 sm:hidden">{t.dashboardTitle}</h1>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {installPrompt && (
-                <button 
-                    onClick={onInstall}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg transition-colors font-bold text-xs flex items-center gap-1"
-                >
-                    <Download size={14} />
-                    <span className="hidden sm:inline">{t.installApp}</span>
-                </button>
-            )}
-
-            <button onClick={toggleLang} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg transition-colors font-bold text-xs uppercase">
-                {lang === 'ar' ? 'EN' : 'AR'}
-            </button>
-            <button 
-              onClick={() => setIsFormOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
-            >
-              <Plus size={18} />
-              <span className="hidden sm:inline">{t.addNew}</span>
-            </button>
-            <button 
-              onClick={onLogout}
-              className="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 px-3 py-2 rounded-lg transition-colors border border-slate-200"
-              title={t.logout}
-            >
-              <LogOut size={18} />
-            </button>
+            {installPrompt && <button onClick={onInstall} className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-xs flex gap-1"><Download size={14} /> {t.installApp}</button>}
+            <button onClick={toggleLang} className="bg-slate-100 px-3 py-2 rounded-lg font-bold text-xs uppercase">{lang === 'ar' ? 'EN' : 'AR'}</button>
+            <button onClick={() => setIsFormOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Plus size={18} /><span className="hidden sm:inline">{t.addNew}</span></button>
+            <button onClick={onLogout} className="bg-slate-100 px-3 py-2 rounded-lg"><LogOut size={18} /></button>
           </div>
         </div>
       </header>
-
-      {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 py-8">
         {employees.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
-            <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <UserPlus size={32} />
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">{t.noCards}</h3>
-            <p className="text-slate-500 mb-6">{t.noCardsSub}</p>
-            <button onClick={() => setIsFormOpen(true)} className="text-blue-600 font-bold hover:underline">
-              {t.addFirst}
-            </button>
-          </div>
+          <div className="text-center py-20 bg-white rounded-2xl border border-dashed"><h3 className="text-lg font-bold">{t.noCards}</h3><button onClick={() => setIsFormOpen(true)} className="text-blue-600 font-bold">{t.addFirst}</button></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {employees.map(emp => (
-              <EmployeeCard 
-                key={emp.id} 
-                employee={emp} 
-                t={t}
-                onDelete={() => handleDelete(emp)}
-                onManage={() => setManagingEmployee(emp)}
-                onPreview={() => setPreviewEmployee(emp)}
-              />
+              <EmployeeCard key={emp.id} employee={emp} t={t} onDelete={() => handleDelete(emp)} onManage={() => setManagingEmployee(emp)} onPreview={() => setPreviewEmployee(emp)} />
             ))}
           </div>
         )}
       </main>
-
-      {isFormOpen && (
-        <EmployeeForm 
-          onClose={() => setIsFormOpen(false)} 
-          initialData={null} 
-          userId={user.uid} 
-          t={t}
-        />
-      )}
-
-      {previewEmployee && (
-        <PreviewModal 
-          employee={previewEmployee} 
-          userId={user.uid} 
-          onClose={() => setPreviewEmployee(null)} 
-          t={t}
-        />
-      )}
+      {isFormOpen && <EmployeeForm onClose={() => setIsFormOpen(false)} initialData={null} userId={user.uid} t={t} />}
+      {previewEmployee && <PreviewModal employee={previewEmployee} userId={user.uid} onClose={() => setPreviewEmployee(null)} t={t} />}
     </div>
   );
 }
 
-// --- بطاقة الموظف في القائمة ---
+// --- بطاقة الموظف ---
 function EmployeeCard({ employee, onDelete, onManage, onPreview, t }) {
   const themeColor = employee.themeColor || '#2563eb';
   const isCompany = employee.profileType === 'company';
-
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 relative group">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 relative group">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
-          {employee.photoUrl ? (
-            <img 
-              src={employee.photoUrl} 
-              alt={employee.name} 
-              className={`w-12 h-12 object-cover border border-slate-200 ${isCompany ? 'rounded-lg' : 'rounded-full'}`}
-              style={{ borderColor: themeColor }}
-            />
-          ) : (
-            <div 
-              className={`w-12 h-12 flex items-center justify-center text-xl font-bold text-white ${isCompany ? 'rounded-lg' : 'rounded-full'}`}
-              style={{ backgroundColor: themeColor }}
-            >
-              {isCompany ? <Building2 size={20} /> : employee.name.charAt(0)}
-            </div>
-          )}
-          <div>
-            <h3 className="font-bold text-slate-800 line-clamp-1">{employee.name}</h3>
-            <p className="text-sm text-slate-500 line-clamp-1">
-              {isCompany ? (employee.jobTitle || t.company) : (employee.jobTitle || t.employee)}
-            </p>
-          </div>
+          {employee.photoUrl ? <img src={employee.photoUrl} alt={employee.name} className={`w-12 h-12 object-cover border border-slate-200 ${isCompany ? 'rounded-lg' : 'rounded-full'}`} style={{ borderColor: themeColor }} /> : <div className={`w-12 h-12 flex items-center justify-center text-xl font-bold text-white ${isCompany ? 'rounded-lg' : 'rounded-full'}`} style={{ backgroundColor: themeColor }}>{isCompany ? <Building2 size={20} /> : employee.name.charAt(0)}</div>}
+          <div><h3 className="font-bold text-slate-800 line-clamp-1">{employee.name}</h3><p className="text-sm text-slate-500 line-clamp-1">{isCompany ? (employee.jobTitle || t.company) : (employee.jobTitle || t.employee)}</p></div>
         </div>
         <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"><Trash2 size={16} /></button>
       </div>
-      
       <div className="flex gap-2 mt-4">
           <button onClick={onManage} className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-800">{t.manageCard}</button>
           <button onClick={onPreview} className="px-3 border border-slate-200 rounded-lg text-blue-600 hover:bg-blue-50"><Eye size={18}/></button>
@@ -769,8 +472,6 @@ function EmployeeCard({ employee, onDelete, onManage, onPreview, t }) {
 // --- صفحة إدارة الموظف (Tabs System) ---
 function EmployeeManager({ userId, employee, onBack, t, lang }) {
     const [activeTab, setActiveTab] = useState('stats');
-    
-    // Tabs configuration
     const tabs = [
         { id: 'stats', label: t.stats, icon: BarChart3 },
         { id: 'settings', label: t.editData, icon: Settings },
@@ -794,43 +495,19 @@ function EmployeeManager({ userId, employee, onBack, t, lang }) {
 
     return (
         <div className="fixed inset-0 bg-slate-50 z-40 flex flex-col">
-            {/* Header */}
             <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shadow-sm z-10">
                 <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ArrowLeft size={20} /></button>
-                <div className="flex-1">
-                    <h2 className="font-bold text-lg">{employee.name}</h2>
-                    <p className="text-xs text-slate-500">{employee.jobTitle}</p>
-                </div>
+                <div className="flex-1"><h2 className="font-bold text-lg">{employee.name}</h2><p className="text-xs text-slate-500">{employee.jobTitle}</p></div>
             </div>
-
-            {/* Tabs Navigation (Scrollable) */}
-            <div className="bg-white border-b border-slate-200 overflow-x-auto no-scrollbar">
-                <div className="flex px-4 min-w-max">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <tab.icon size={16} />
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
-                {renderContent()}
-            </div>
+            <div className="bg-white border-b border-slate-200 overflow-x-auto no-scrollbar"><div className="flex px-4 min-w-max">{tabs.map(tab => <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><tab.icon size={16} />{tab.label}</button>)}</div></div>
+            <div className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">{renderContent()}</div>
         </div>
     );
 }
 
-// --- التبويبات (Tabs Components) ---
+// --- Tabs Components ---
 
 function AnalyticsTab({ userId, employee, t }) {
-    // Reusing logic from AnalyticsModal but adapted for tab view
     const stats = employee.stats || { views: 0, clicks: {}, countries: {}, heatmap: {} };
     const clicks = stats.clicks || {};
     const countries = stats.countries || {};
@@ -839,40 +516,11 @@ function AnalyticsTab({ userId, employee, t }) {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm text-center">
-                    <div className="text-blue-500 mb-1 flex justify-center"><Activity size={24} /></div>
-                    <div className="text-2xl font-bold text-slate-800">{stats.views}</div>
-                    <div className="text-xs text-slate-500">{t.totalViews}</div>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-orange-100 shadow-sm text-center">
-                    <div className="text-orange-500 mb-1 flex justify-center"><MousePointerClick size={24} /></div>
-                    <div className="text-2xl font-bold text-slate-800">{Object.values(clicks).reduce((a, b) => a + b, 0)}</div>
-                    <div className="text-xs text-slate-500">{t.totalClicks}</div>
-                </div>
+                <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm text-center"><div className="text-blue-500 mb-1 flex justify-center"><Activity size={24} /></div><div className="text-2xl font-bold text-slate-800">{stats.views}</div><div className="text-xs text-slate-500">{t.totalViews}</div></div>
+                <div className="bg-white p-4 rounded-xl border border-orange-100 shadow-sm text-center"><div className="text-orange-500 mb-1 flex justify-center"><MousePointerClick size={24} /></div><div className="text-2xl font-bold text-slate-800">{Object.values(clicks).reduce((a, b) => a + b, 0)}</div><div className="text-xs text-slate-500">{t.totalClicks}</div></div>
             </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-700 mb-3">{t.interactions}</h3>
-                <div className="space-y-3">
-                    {Object.entries(clicks).sort(([,a],[,b])=>b-a).map(([k,v])=>(
-                        <div key={k} className="flex justify-between text-sm py-2 border-b border-slate-50 last:border-0">
-                            <span>{k}</span><span className="font-bold bg-slate-100 px-2 rounded">{v}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-700 mb-3">{t.topCountries}</h3>
-                <div className="space-y-2">
-                    {Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => (
-                        <div key={code} className="flex justify-between text-sm py-1">
-                            <span>{getFlag(code)} {code}</span>
-                            <span className="font-bold">{count}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-700 mb-3">{t.interactions}</h3><div className="space-y-3">{Object.entries(clicks).sort(([,a],[,b])=>b-a).map(([k,v])=><div key={k} className="flex justify-between text-sm py-2 border-b border-slate-50 last:border-0"><span>{k}</span><span className="font-bold bg-slate-100 px-2 rounded">{v}</span></div>)}</div></div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-700 mb-3">{t.topCountries}</h3><div className="space-y-2">{Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => <div key={code} className="flex justify-between text-sm py-1"><span>{getFlag(code)} {code}</span><span className="font-bold">{count}</span></div>)}</div></div>
         </div>
     );
 }
@@ -895,12 +543,7 @@ function LeadsTab({ userId, employee, t }) {
     <div className="space-y-3 animate-in fade-in">
         {leads.map(l => (
             <div key={l.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-start">
-                <div>
-                    <div className="font-bold text-slate-800">{l.name}</div>
-                    <div className="text-sm text-slate-500 font-mono" dir="ltr">{l.phone}</div>
-                    {l.interest && <div className="text-xs text-indigo-600 mt-2 font-bold bg-indigo-50 inline-block px-2 py-1 rounded">{l.interest}</div>}
-                    <div className="text-xs text-slate-300 mt-1">{l.createdAt?.seconds ? new Date(l.createdAt.seconds * 1000).toLocaleDateString() : ''}</div>
-                </div>
+                <div><div className="font-bold text-slate-800">{l.name}</div><div className="text-sm text-slate-500 font-mono" dir="ltr">{l.phone}</div>{l.interest && <div className="text-xs text-indigo-600 mt-2 font-bold bg-indigo-50 inline-block px-2 py-1 rounded">{l.interest}</div>}<div className="text-xs text-slate-300 mt-1">{l.createdAt?.seconds ? new Date(l.createdAt.seconds * 1000).toLocaleDateString() : ''}</div></div>
                 <a href={`tel:${l.phone}`} className="p-2 bg-green-50 text-green-600 rounded-full hover:bg-green-100"><Phone size={18} /></a>
             </div>
         ))}
@@ -916,24 +559,11 @@ function QRTab({ userId, employee, t }) {
     const qrColor = employee.qrColor?.replace('#', '') || '000000';
     const qrBgColor = employee.qrBgColor?.replace('#', '') || 'ffffff';
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
-    
-    const downloadQR = async () => {
-        try {
-          const response = await fetch(qrImageUrl);
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a'); link.href = url; link.download = `${employee.name}-qr.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        } catch (error) { window.alert('Error'); }
-    };
-
+    const downloadQR = async () => { try { const response = await fetch(qrImageUrl); const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${employee.name}-qr.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link); } catch (error) { window.alert('Error'); } };
     return (
         <div className="flex flex-col items-center justify-center py-8 animate-in fade-in">
-            <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-100 mb-6">
-                <img src={qrImageUrl} alt="QR" className="w-64 h-64" />
-            </div>
-            <button onClick={downloadQR} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors">
-                <Download size={18} /> {t.code}
-            </button>
+            <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-100 mb-6"><img src={qrImageUrl} alt="QR" className="w-64 h-64" /></div>
+            <button onClick={downloadQR} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors"><Download size={18} /> {t.code}</button>
             <p className="text-sm text-slate-400 mt-4 font-mono">{getProfileUrl()}</p>
         </div>
     );
@@ -951,17 +581,8 @@ function ProductsTab({ userId, employee, t }) {
       });
     }, [userId, employee.id]);
   
-    const handleAddProduct = async (e) => {
-      e.preventDefault(); setIsAdding(true);
-      try {
-        await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products'), { ...newProduct, createdAt: serverTimestamp() });
-        setNewProduct({ name: '', price: '', description: '', imageUrl: '', link: '' });
-      } catch (error) { console.error(error); } finally { setIsAdding(false); }
-    };
-
-    const handleDeleteProduct = async (prodId) => {
-        if(window.confirm('Delete?')) await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', prodId));
-    };
+    const handleAddProduct = async (e) => { e.preventDefault(); setIsAdding(true); try { await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products'), { ...newProduct, createdAt: serverTimestamp() }); setNewProduct({ name: '', price: '', description: '', imageUrl: '', link: '' }); } catch (error) { console.error(error); } finally { setIsAdding(false); } };
+    const handleDeleteProduct = async (prodId) => { if(window.confirm('Delete?')) await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', prodId)); };
 
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -976,18 +597,11 @@ function ProductsTab({ userId, employee, t }) {
               </div>
               <button type="submit" disabled={isAdding} className="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">{isAdding ? t.saving : t.save}</button>
            </form>
-
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {products.map(prod => (
                   <div key={prod.id} className="bg-white p-3 rounded-xl border border-slate-200 flex gap-3 relative group">
-                      <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                          {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <Package className="w-full h-full p-4 text-slate-300" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                          <div className="font-bold text-slate-800 truncate">{prod.name}</div>
-                          <div className="text-indigo-600 text-sm font-bold">{prod.price} {t.currency}</div>
-                          <p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p>
-                      </div>
+                      <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">{prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <Package className="w-full h-full p-4 text-slate-300" />}</div>
+                      <div className="flex-1 min-w-0"><div className="font-bold text-slate-800 truncate">{prod.name}</div><div className="text-indigo-600 text-sm font-bold">{prod.price} {t.currency}</div><p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p></div>
                       <button onClick={() => handleDeleteProduct(prod.id)} className="absolute top-2 right-2 p-1.5 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
                   </div>
               ))}
@@ -1002,17 +616,13 @@ function StoriesTab({ userId, employee, t }) {
     const [products, setProducts] = useState([]);
     const [newStory, setNewStory] = useState({ url: '', type: 'image', productId: '' });
     const [isAdding, setIsAdding] = useState(false);
-    const [storyStatsModal, setStoryStatsModal] = useState(null); // قصة محددة لعرض إحصائياتها
+    const [storyStatsModal, setStoryStatsModal] = useState(null);
   
     useEffect(() => {
       const qStories = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
-      const unsubStories = onSnapshot(qStories, (snapshot) => {
-        setStories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-      });
+      const unsubStories = onSnapshot(qStories, (snapshot) => setStories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))));
       const qProducts = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
-      const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-         setProducts(snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
-      });
+      const unsubProducts = onSnapshot(qProducts, (snapshot) => setProducts(snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }))));
       return () => { unsubStories(); unsubProducts(); };
     }, [userId, employee.id]);
 
@@ -1035,14 +645,10 @@ function StoriesTab({ userId, employee, t }) {
                   <select value={newStory.type} onChange={e => setNewStory({...newStory, type: e.target.value})} className="px-3 py-2 border rounded-lg text-sm bg-white"><option value="image">{t.typeImage}</option><option value="video">{t.typeVideo}</option></select>
               </div>
               <div className="mb-3">
-                  <select value={newStory.productId} onChange={e => setNewStory({...newStory, productId: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                      <option value="">{t.linkProduct}</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  <select value={newStory.productId} onChange={e => setNewStory({...newStory, productId: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm bg-white"><option value="">{t.linkProduct}</option>{products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
               </div>
               <button type="submit" disabled={isAdding} className="w-full bg-pink-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50">{isAdding ? t.saving : t.save}</button>
            </form>
-
            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {stories.map(story => (
                   <div key={story.id} className="relative aspect-[9/16] rounded-xl overflow-hidden group border border-slate-200 bg-black">
@@ -1054,59 +660,16 @@ function StoriesTab({ userId, employee, t }) {
                           <button onClick={() => setStoryStatsModal(story)} className="mt-2 text-xs border border-white px-2 py-1 rounded hover:bg-white hover:text-black transition-colors">{t.stats}</button>
                       </div>
                       <button onClick={() => handleDelete(story.id)} className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 size={14} /></button>
-                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded-md backdrop-blur-sm">{story.type === 'video' ? <Video size={10} /> : <ImageIcon size={10} />}</div>
                   </div>
               ))}
               {stories.length === 0 && <div className="col-span-full text-center text-slate-400 py-8">{t.noStories}</div>}
            </div>
-
            {storyStatsModal && <StoryAnalyticsModal story={storyStatsModal} onClose={() => setStoryStatsModal(null)} t={t} />}
         </div>
     );
 }
 
-// --- نافذة تحليل القصة (جديد) ---
-function StoryAnalyticsModal({ story, onClose, t }) {
-    const stats = story.stats || { views: 0, clicks: 0, countries: {}, devices: {} };
-    const ctr = stats.views > 0 ? ((stats.clicks / stats.views) * 100).toFixed(1) : 0;
-    const countries = stats.countries || {};
-    const devices = stats.devices || {};
-    const getFlag = (code) => { if(!code || code==='Unknown') return '🌍'; return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt())); };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto shadow-2xl p-6">
-                <div className="flex justify-between mb-6 border-b pb-4"><h3 className="font-bold text-lg">{t.storyStats}</h3><button onClick={onClose}><X size={20}/></button></div>
-                
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="bg-blue-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-blue-600">{stats.views}</div><div className="text-xs text-slate-500">{t.views}</div></div>
-                    <div className="bg-green-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-green-600">{stats.clicks}</div><div className="text-xs text-slate-500">{t.clicks}</div></div>
-                    <div className="col-span-2 bg-purple-50 p-3 rounded-xl text-center"><div className="text-xl font-bold text-purple-600">{ctr}%</div><div className="text-xs text-slate-500">{t.ctr}</div></div>
-                </div>
-
-                <div className="space-y-4">
-                    <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.devices}</h4>
-                        <div className="space-y-2">
-                             <div className="flex justify-between text-sm"><span><Smartphone size={14} className="inline mr-1"/> {t.mobileDevice}</span><span>{devices.mobile || 0}</span></div>
-                             <div className="flex justify-between text-sm"><span><Monitor size={14} className="inline mr-1"/> {t.desktop}</span><span>{devices.desktop || 0}</span></div>
-                        </div>
-                    </div>
-                    <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.topCountries}</h4>
-                        <div className="space-y-1">
-                            {Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => (
-                                <div key={code} className="flex justify-between text-sm border-b border-slate-50 py-1 last:border-0"><span>{getFlag(code)} {code}</span><span className="font-bold">{count}</span></div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// --- نموذج الموظف (تم استعادته) ---
+// --- نموذج الموظف (المعاد استخدامه) ---
 function EmployeeForm({ onClose, initialData, userId, t, isEmbedded = false }) {
   const [formData, setFormData] = useState({
     profileType: 'employee', name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
@@ -1258,7 +821,6 @@ function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLea
     if (!story || viewLogged.current.has(story.id)) return;
     
     viewLogged.current.add(story.id);
-    
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const deviceType = isMobile ? 'mobile' : 'desktop';
 
@@ -1267,14 +829,7 @@ function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLea
         const res = await fetch('https://ipwho.is/');
         const geo = await res.json();
         const countryCode = geo.success ? geo.country_code : 'Unknown';
-
-        await setDoc(storyRef, {
-            stats: {
-                views: increment(1),
-                countries: { [countryCode]: increment(1) },
-                devices: { [deviceType]: increment(1) }
-            }
-        }, { merge: true });
+        await setDoc(storyRef, { stats: { views: increment(1), countries: { [countryCode]: increment(1) }, devices: { [deviceType]: increment(1) } } }, { merge: true });
     } catch (e) { console.warn("Analytics error", e); }
   };
 
@@ -1293,7 +848,6 @@ function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLea
   }, [currentIndex, stories.length, onClose]);
 
   useEffect(() => { setProgress(0); }, [currentIndex]);
-
   const handleNext = () => { if (currentIndex < stories.length - 1) setCurrentIndex(prev => prev + 1); else onClose(); };
   const handlePrev = () => { if (currentIndex > 0) setCurrentIndex(prev => prev - 1); };
 
@@ -1302,14 +856,10 @@ function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLea
 
   const handleProductClick = async () => {
       try {
-        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employee.id, 'stories', currentStory.id);
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', currentStory.id);
         await setDoc(storyRef, { stats: { clicks: increment(1) } }, { merge: true });
       } catch(e) {}
-
-      if (linkedProduct) {
-          if (linkedProduct.link) window.open(linkedProduct.link, '_blank');
-          else trackLead(linkedProduct.name);
-      }
+      if (linkedProduct) { if (linkedProduct.link) window.open(linkedProduct.link, '_blank'); else trackLead(linkedProduct.name); }
   };
 
   return (
@@ -1369,16 +919,7 @@ function QRModal({ employee, userId, onClose, t }) {
   const qrColor = employee.qrColor?.replace('#', '') || '000000';
   const qrBgColor = employee.qrBgColor?.replace('#', '') || 'ffffff';
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
-
-  const downloadQR = async () => {
-    try {
-      const response = await fetch(qrImageUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `${employee.name}-qr.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    } catch (error) { window.alert('Error'); }
-  };
-
+  const downloadQR = async () => { try { const response = await fetch(qrImageUrl); const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${employee.name}-qr.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link); } catch (error) { window.alert('Error'); } };
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-sm p-8 flex flex-col items-center relative">
@@ -1389,4 +930,30 @@ function QRModal({ employee, userId, onClose, t }) {
       </div>
     </div>
   );
+}
+
+// --- Story Analytics Modal ---
+function StoryAnalyticsModal({ story, onClose, t }) {
+    const stats = story.stats || { views: 0, clicks: 0, countries: {}, devices: {} };
+    const ctr = stats.views > 0 ? ((stats.clicks / stats.views) * 100).toFixed(1) : 0;
+    const countries = stats.countries || {};
+    const devices = stats.devices || {};
+    const getFlag = (code) => { if(!code || code==='Unknown') return '🌍'; return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt())); };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto shadow-2xl p-6">
+                <div className="flex justify-between mb-6 border-b pb-4"><h3 className="font-bold text-lg">{t.storyStats}</h3><button onClick={onClose}><X size={20}/></button></div>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-blue-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-blue-600">{stats.views}</div><div className="text-xs text-slate-500">{t.views}</div></div>
+                    <div className="bg-green-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-green-600">{stats.clicks}</div><div className="text-xs text-slate-500">{t.clicks}</div></div>
+                    <div className="col-span-2 bg-purple-50 p-3 rounded-xl text-center"><div className="text-xl font-bold text-purple-600">{ctr}%</div><div className="text-xs text-slate-500">{t.ctr}</div></div>
+                </div>
+                <div className="space-y-4">
+                    <div><h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.devices}</h4><div className="space-y-2"><div className="flex justify-between text-sm"><span><Smartphone size={14} className="inline mr-1"/> {t.mobileDevice}</span><span>{devices.mobile || 0}</span></div><div className="flex justify-between text-sm"><span><Monitor size={14} className="inline mr-1"/> {t.desktop}</span><span>{devices.desktop || 0}</span></div></div></div>
+                    <div><h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.topCountries}</h4><div className="space-y-1">{Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => <div key={code} className="flex justify-between text-sm border-b border-slate-50 py-1 last:border-0"><span>{getFlag(code)} {code}</span><span className="font-bold">{count}</span></div>)}</div></div>
+                </div>
+            </div>
+        </div>
+    );
 }
