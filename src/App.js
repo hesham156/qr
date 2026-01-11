@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc, getDocs } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon, Monitor, PieChart } from 'lucide-react';
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon, Monitor, PieChart, Settings, ArrowLeft } from 'lucide-react';
 
 // --- تهيئة Firebase ---
 let firebaseConfig;
@@ -260,7 +260,7 @@ const translations = {
     alertMsg: 'Please check Firestore Rules permissions.',
     installApp: 'Install App',
     productsTitle: 'Products & Services',
-    manageProducts: 'Products',
+    manageProducts: 'Manage Products',
     addProduct: 'Add Product',
     prodName: 'Product Name',
     prodPrice: 'Price',
@@ -274,7 +274,7 @@ const translations = {
     tabProducts: 'Products',
     orderInterest: 'Interested in: ',
     storiesTitle: 'Stories',
-    manageStories: 'Stories',
+    manageStories: 'Manage Stories',
     addStory: 'Add Story',
     storyUrl: 'Image/Video URL',
     storyType: 'Type',
@@ -310,7 +310,6 @@ export default function App() {
   
   // PWA Initialization
   useEffect(() => {
-    // 1. Inject Manifest dynamically
     const manifest = {
       name: "Digital Cards",
       short_name: "DigiCard",
@@ -344,7 +343,6 @@ export default function App() {
     }
     link.href = manifestURL;
 
-    // 2. Handle Install Prompt
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -371,7 +369,6 @@ export default function App() {
   const checkRoute = (currentUser) => {
     const hashString = window.location.hash.substring(1); 
     
-    // 1. الرابط الافتراضي
     if (hashString.includes('uid=') && hashString.includes('pid=')) {
       const params = new URLSearchParams(hashString);
       const pid = params.get('pid');
@@ -383,7 +380,6 @@ export default function App() {
         return;
       }
     } 
-    // 2. الرابط المختصر (Slug)
     else if (hashString && !hashString.includes('=')) {
         try {
             const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', hashString);
@@ -401,7 +397,6 @@ export default function App() {
         }
     }
 
-    // 3. التوجيه الافتراضي
     if (currentUser && !currentUser.isAnonymous) {
       setViewMode('dashboard');
     } else {
@@ -732,7 +727,7 @@ function EmployeeCard({ employee, onDelete, onManage, onPreview, t }) {
   const isCompany = employee.profileType === 'company';
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 relative group">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 relative group">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
           {employee.photoUrl ? (
@@ -832,7 +827,6 @@ function EmployeeManager({ userId, employee, onBack, t, lang }) {
 // --- التبويبات (Tabs Components) ---
 
 function AnalyticsTab({ userId, employee, t }) {
-    // Reusing logic from AnalyticsModal but adapted for tab view
     const stats = employee.stats || { views: 0, clicks: {}, countries: {}, heatmap: {} };
     const clicks = stats.clicks || {};
     const countries = stats.countries || {};
@@ -1056,7 +1050,7 @@ function StoriesTab({ userId, employee, t }) {
     );
 }
 
-// --- نافذة تحليل القصة (جديد) ---
+// --- Story Analytics Modal ---
 function StoryAnalyticsModal({ story, onClose, t }) {
     const stats = story.stats || { views: 0, clicks: 0, countries: {}, devices: {} };
     const ctr = stats.views > 0 ? ((stats.clicks / stats.views) * 100).toFixed(1) : 0;
@@ -1068,36 +1062,255 @@ function StoryAnalyticsModal({ story, onClose, t }) {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto shadow-2xl p-6">
                 <div className="flex justify-between mb-6 border-b pb-4"><h3 className="font-bold text-lg">{t.storyStats}</h3><button onClick={onClose}><X size={20}/></button></div>
-                
                 <div className="grid grid-cols-2 gap-3 mb-6">
                     <div className="bg-blue-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-blue-600">{stats.views}</div><div className="text-xs text-slate-500">{t.views}</div></div>
                     <div className="bg-green-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-green-600">{stats.clicks}</div><div className="text-xs text-slate-500">{t.clicks}</div></div>
                     <div className="col-span-2 bg-purple-50 p-3 rounded-xl text-center"><div className="text-xl font-bold text-purple-600">{ctr}%</div><div className="text-xs text-slate-500">{t.ctr}</div></div>
                 </div>
-
                 <div className="space-y-4">
-                    <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.devices}</h4>
-                        <div className="space-y-2">
-                             <div className="flex justify-between text-sm"><span><Smartphone size={14} className="inline mr-1"/> {t.mobileDevice}</span><span>{devices.mobile || 0}</span></div>
-                             <div className="flex justify-between text-sm"><span><Monitor size={14} className="inline mr-1"/> {t.desktop}</span><span>{devices.desktop || 0}</span></div>
-                        </div>
-                    </div>
-                    <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.topCountries}</h4>
-                        <div className="space-y-1">
-                            {Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => (
-                                <div key={code} className="flex justify-between text-sm border-b border-slate-50 py-1 last:border-0"><span>{getFlag(code)} {code}</span><span className="font-bold">{count}</span></div>
-                            ))}
-                        </div>
-                    </div>
+                    <div><h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.devices}</h4><div className="space-y-2"><div className="flex justify-between text-sm"><span><Smartphone size={14} className="inline mr-1"/> {t.mobileDevice}</span><span>{devices.mobile || 0}</span></div><div className="flex justify-between text-sm"><span><Monitor size={14} className="inline mr-1"/> {t.desktop}</span><span>{devices.desktop || 0}</span></div></div></div>
+                    <div><h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.topCountries}</h4><div className="space-y-1">{Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => <div key={code} className="flex justify-between text-sm border-b border-slate-50 py-1 last:border-0"><span>{getFlag(code)} {code}</span><span className="font-bold">{count}</span></div>)}</div></div>
                 </div>
             </div>
         </div>
     );
 }
 
-// --- نموذج الموظف (تم استعادته) ---
+// --- Profile View ---
+function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
+  const [data, setData] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [stories, setStories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('info'); // info, products
+  const [error, setError] = useState(null);
+  const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
+  const [leadInterest, setLeadInterest] = useState(''); // المنتج المهتم به
+  const [showWalletModal, setShowWalletModal] = useState(null);
+  const [isStoryOpen, setIsStoryOpen] = useState(false); // حالة القصة
+  const isLogged = useRef(false);
+
+  // جلب البيانات + المنتجات + القصص
+  useEffect(() => {
+    if (!user) return;
+    const fetchData = async () => {
+      try {
+        const empRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
+        const empSnap = await getDoc(empRef);
+        
+        if (empSnap.exists()) {
+          setData(empSnap.data());
+          setLoading(false); // تحسين الأداء: إخفاء التحميل فوراً عند جلب البيانات الأساسية
+
+          // جلب المنتجات
+          const prodRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'products');
+          getDocs(prodRef).then((prodSnap) => {
+              const prods = [];
+              prodSnap.forEach(d => prods.push({id: d.id, ...d.data()}));
+              setProducts(prods);
+          });
+
+          // جلب القصص
+          const storyRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'stories');
+          getDocs(storyRef).then((storySnap) => {
+              const storyList = [];
+              storySnap.forEach(d => storyList.push({id: d.id, ...d.data()}));
+              storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+              setStories(storyList);
+          });
+
+          // تسجيل التحليلات (مرة واحدة)
+          if (!isLogged.current) {
+            isLogged.current = true;
+            try {
+                const res = await fetch('https://ipwho.is/');
+                const geo = await res.json();
+                const countryCode = geo.success ? geo.country_code : 'Unknown';
+                const lat = geo.success ? geo.latitude : 0;
+                const lng = geo.success ? geo.longitude : 0;
+                const locationKey = `${Math.round(lat * 10) / 10}_${Math.round(lng * 10) / 10}`;
+                await setDoc(empRef, {
+                    stats: { views: increment(1), countries: { [countryCode]: increment(1) }, heatmap: { [locationKey]: increment(1) } }
+                }, { merge: true });
+            } catch (e) { /* ignore */ }
+          }
+        } else {
+          setError('لم يتم العثور على البطاقة');
+          setLoading(false);
+        }
+      } catch (err) {
+        setError('حدث خطأ أثناء تحميل البيانات');
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [profileData, user]);
+
+  const trackClick = async (action) => {
+    try {
+        const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
+        await setDoc(docRef, { stats: { clicks: { [action]: increment(1) } } }, { merge: true });
+    } catch (e) { /* ignore */ }
+  };
+
+  const handleBuyProduct = (prod) => {
+      trackClick(`buy_${prod.name}`);
+      if (prod.link) {
+          window.open(prod.link, '_blank');
+      } else {
+          setLeadInterest(`${t.orderInterest} ${prod.name}`);
+          setIsLeadFormOpen(true);
+      }
+  };
+
+  const handleStoryAction = (productName) => {
+      setIsStoryOpen(false); // إغلاق القصص
+      setLeadInterest(`${t.orderInterest} ${productName}`);
+      setIsLeadFormOpen(true); // فتح الفورم
+  };
+
+  const downloadVCard = () => {
+    trackClick('save_contact');
+    if (!data) return;
+    const isCompany = data.profileType === 'company';
+    const org = isCompany ? data.name : (data.company || '');
+    const title = isCompany ? '' : (data.jobTitle || '');
+    const note = isCompany ? (data.jobTitle || '') : '';
+    const companyField = isCompany ? 'X-ABShowAs:COMPANY\n' : '';
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${data.name};;;;\nFN;CHARSET=UTF-8:${data.name}\n${companyField}TEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${title ? `TITLE;CHARSET=UTF-8:${title}\n` : ''}${org ? `ORG;CHARSET=UTF-8:${org}\n` : ''}${note ? `NOTE;CHARSET=UTF-8:${note}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}END:VCARD`;
+    const blob = new Blob([vcard], { type: 'text/vcard' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.setAttribute('download', `${data.name}.vcf`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-blue-600 rounded-full border-t-transparent"></div></div>;
+  if (error) return <div className="min-h-screen flex flex-col items-center justify-center p-4 text-red-500">{error}</div>;
+
+  const themeColor = data.themeColor || '#2563eb';
+  const template = data.template || 'classic';
+
+  const renderInfoTab = () => (
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="mt-16 text-center mb-8">
+            <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
+            <p className="font-medium" style={{ color: themeColor }}>{data.jobTitle} {data.company && `| ${data.company}`}</p>
+            {/* Socials */}
+            <div className="flex justify-center gap-3 mt-4 mb-4 flex-wrap">
+                {data.facebook && <a href={data.facebook} target="_blank" onClick={() => trackClick('facebook')} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Facebook size={20} /></a>}
+                {data.twitter && <a href={data.twitter} target="_blank" onClick={() => trackClick('twitter')} className="p-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"><Twitter size={20} /></a>}
+                {data.instagram && <a href={data.instagram} target="_blank" onClick={() => trackClick('instagram')} className="p-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 transition-colors"><Instagram size={20} /></a>}
+                {data.linkedin && <a href={data.linkedin} target="_blank" onClick={() => trackClick('linkedin')} className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-800 transition-colors"><Linkedin size={20} /></a>}
+                {data.youtube && <a href={data.youtube} target="_blank" onClick={() => trackClick('youtube')} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"><Youtube size={20} /></a>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Phone size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.call}</span></a>
+            <a href={`https://wa.me/${data.whatsapp}`} target="_blank" onClick={() => trackClick('whatsapp')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><MessageCircle size={20} className="text-emerald-500" /> <span className="font-bold">{t.whatsapp}</span></a>
+            {data.email && <a href={`mailto:${data.email}`} onClick={() => trackClick('email')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Mail size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.emailAction}</span></a>}
+            {data.website && <a href={data.website} target="_blank" onClick={() => trackClick('website')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Globe size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.websiteAction}</span></a>}
+            <button onClick={() => { setLeadInterest(''); setIsLeadFormOpen(true); }} className="col-span-2 flex items-center justify-center gap-2 bg-slate-900 text-white p-4 rounded-xl hover:bg-slate-800 transition-colors shadow-sm"><UserPlus size={20} /> <span className="font-bold">{t.exchangeContact}</span></button>
+            <button onClick={() => setShowWalletModal('apple')} className="col-span-1 flex items-center justify-center gap-2 bg-black text-white p-3 rounded-xl hover:bg-gray-800"><Wallet size={20} /><span className="font-bold text-xs">Apple</span></button>
+            <button onClick={() => setShowWalletModal('google')} className="col-span-1 flex items-center justify-center gap-2 bg-white text-black border border-slate-200 p-3 rounded-xl hover:bg-slate-50"><CreditCard size={20} className="text-blue-500" /><span className="font-bold text-xs">Google</span></button>
+            {data.cvUrl && <a href={data.cvUrl} target="_blank" onClick={() => trackClick('download_cv')} className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><FileText size={20} className="text-orange-500" /> <span className="font-bold">{t.downloadCv}</span></a>}
+          </div>
+
+          <button onClick={downloadVCard} className="w-full text-white p-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mb-8 transform active:scale-95" style={{ backgroundColor: themeColor }}><UserPlus size={20} /> {t.saveContact}</button>
+      </div>
+  );
+
+  const renderProductsTab = () => (
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 pb-8">
+          {products.length === 0 ? (
+              <div className="text-center text-slate-400 py-10">
+                  <ShoppingBag size={48} className="mx-auto mb-2 opacity-20" />
+                  <p>{t.noProducts}</p>
+              </div>
+          ) : (
+              <div className="grid grid-cols-1 gap-4">
+                  {products.map(prod => (
+                      <div key={prod.id} className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 flex flex-col">
+                          <div className="h-40 w-full bg-slate-100 relative">
+                              {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-slate-300"><ImageIcon size={32}/></div>}
+                              {prod.price && <div className="absolute top-2 right-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-sm">{prod.price} {t.currency}</div>}
+                          </div>
+                          <div className="p-4 flex-1 flex flex-col">
+                              <h3 className="font-bold text-slate-800 text-lg mb-1">{prod.name}</h3>
+                              <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{prod.description}</p>
+                              <button 
+                                onClick={() => handleBuyProduct(prod)}
+                                className="w-full py-2.5 rounded-lg text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: themeColor }}
+                              >
+                                {prod.link ? <ExternalLink size={16}/> : <ShoppingCart size={16}/>}
+                                {t.buy}
+                              </button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          )}
+      </div>
+  );
+
+  const renderHeader = () => (
+    <div className="h-32 relative" style={{ background: `linear-gradient(to right, ${themeColor}, #1e293b)` }}>
+       <div className="absolute top-0 right-0 w-full h-full opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+       {data.bgVideoUrl && <video src={data.bgVideoUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-80" />}
+    </div>
+  );
+
+  // تحديث الصورة الشخصية لدعم حلقة القصص
+  const renderAvatar = () => {
+    const hasStories = stories.length > 0;
+    const ringClass = hasStories ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600" : "border-4 border-white";
+    
+    return (
+        <div 
+            className={`absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`}
+            onClick={() => { if(hasStories) setIsStoryOpen(true); }}
+        >
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-white bg-white">
+                {data.profileVideoUrl ? 
+                    <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : 
+                    (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))
+                }
+            </div>
+        </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative">
+       <button onClick={toggleLang} className="absolute top-4 right-4 z-50 bg-white px-3 py-2 rounded-full shadow-md text-slate-600 hover:text-blue-600 font-bold text-xs"><Globe size={16} /> {lang === 'ar' ? 'English' : 'عربي'}</button>
+       
+       <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative min-h-[80vh] flex flex-col">
+          {renderHeader()}
+          
+          {/* Tabs */}
+          {products.length > 0 && (
+              <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
+                  <button onClick={() => setActiveTab('info')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabInfo}</button>
+                  <button onClick={() => setActiveTab('products')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'products' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabProducts}</button>
+              </div>
+          )}
+
+          <div className="px-6 relative flex-1">
+             {activeTab === 'info' && renderAvatar()}
+             {activeTab === 'info' ? renderInfoTab() : renderProductsTab()}
+          </div>
+          
+          <div className="bg-slate-50 py-4 text-center text-slate-400 text-xs mt-auto">Digital Card System © 2024</div>
+       </div>
+
+      {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} t={t} initialInterest={leadInterest} />}
+      {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} t={t} />}
+      {isStoryOpen && stories.length > 0 && <StoryViewer stories={stories} adminId={profileData.adminId} employeeId={profileData.id} onClose={() => setIsStoryOpen(false)} products={products} trackLead={handleStoryAction} t={t} />}
+    </div>
+  );
+}
+
+// --- نموذج الموظف ---
 function EmployeeForm({ onClose, initialData, userId, t, isEmbedded = false }) {
   const [formData, setFormData] = useState({
     profileType: 'employee', name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
