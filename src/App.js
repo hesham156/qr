@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc, getDocs } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon } from 'lucide-react';
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon, ArrowLeft, Settings, LayoutDashboard, Monitor, PieChart } from 'lucide-react';
 
 // --- تهيئة Firebase ---
 let firebaseConfig;
@@ -64,7 +64,7 @@ const translations = {
     leads: 'العملاء',
     code: 'الرمز',
     preview: 'معاينة',
-    editData: 'تعديل بيانات',
+    editData: 'الإعدادات',
     createCard: 'إنشاء بطاقة جديدة',
     profileType: 'نوع البروفايل',
     profileTypeEmp: 'بروفايل موظف',
@@ -157,6 +157,13 @@ const translations = {
     linkProduct: 'ربط بمنتج (اختياري)',
     selectProduct: 'اختر منتجاً...',
     viewProduct: 'عرض المنتج',
+    manageCard: 'إدارة',
+    back: 'عودة',
+    storyStats: 'إحصائيات القصة',
+    ctr: 'نسبة النقر (CTR)',
+    devices: 'الأجهزة',
+    mobileDevice: 'جوال',
+    desktop: 'كمبيوتر',
   },
   en: {
     loading: 'Loading...',
@@ -184,7 +191,7 @@ const translations = {
     leads: 'Leads',
     code: 'Code',
     preview: 'Preview',
-    editData: 'Edit Data',
+    editData: 'Settings',
     createCard: 'Create New Card',
     profileType: 'Profile Type',
     profileTypeEmp: 'Employee Profile',
@@ -253,7 +260,7 @@ const translations = {
     alertMsg: 'Please check Firestore Rules permissions.',
     installApp: 'Install App',
     productsTitle: 'Products & Services',
-    manageProducts: 'Manage Products',
+    manageProducts: 'Products',
     addProduct: 'Add Product',
     prodName: 'Product Name',
     prodPrice: 'Price',
@@ -267,7 +274,7 @@ const translations = {
     tabProducts: 'Products',
     orderInterest: 'Interested in: ',
     storiesTitle: 'Stories',
-    manageStories: 'Manage Stories',
+    manageStories: 'Stories',
     addStory: 'Add Story',
     storyUrl: 'Image/Video URL',
     storyType: 'Type',
@@ -277,6 +284,13 @@ const translations = {
     linkProduct: 'Link Product (Optional)',
     selectProduct: 'Select a product...',
     viewProduct: 'View Product',
+    manageCard: 'Manage',
+    back: 'Back',
+    storyStats: 'Story Stats',
+    ctr: 'Click Rate (CTR)',
+    devices: 'Devices',
+    mobileDevice: 'Mobile',
+    desktop: 'Desktop',
   }
 };
 
@@ -571,15 +585,9 @@ function LoginView({ lang, toggleLang, t }) {
 // --- لوحة التحكم ---
 function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInstall }) {
   const [employees, setEmployees] = useState([]);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [analyticsEmployee, setAnalyticsEmployee] = useState(null);
-  const [leadsEmployee, setLeadsEmployee] = useState(null); 
+  const [managingEmployee, setManagingEmployee] = useState(null); // The employee currently being managed
+  const [isFormOpen, setIsFormOpen] = useState(false); // Only for creating new
   const [previewEmployee, setPreviewEmployee] = useState(null);
-  const [editingEmployee, setEditingEmployee] = useState(null);
-  const [permissionError, setPermissionError] = useState(false);
-  const [productManagerEmployee, setProductManagerEmployee] = useState(null);
-  const [storiesManagerEmployee, setStoriesManagerEmployee] = useState(null); // جديد
 
   useEffect(() => {
     if (!user) return;
@@ -587,15 +595,9 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
     const q = collection(db, 'artifacts', appId, 'users', user.uid, 'employees');
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPermissionError(false);
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setEmployees(docs);
-    }, (error) => {
-      console.error("Error fetching employees:", error);
-      if (error.code === 'permission-denied') {
-        setPermissionError(true);
-      }
     });
 
     return () => unsubscribe();
@@ -615,19 +617,21 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
     }
   };
 
-  const handleEdit = (employee) => {
-    setEditingEmployee(employee);
-    setIsFormOpen(true);
-  };
-
-  const handleAddNew = () => {
-    setEditingEmployee(null);
-    setIsFormOpen(true);
-  };
+  // If we are managing an employee, show the Manager View
+  if (managingEmployee) {
+    return (
+        <EmployeeManager 
+            userId={user.uid} 
+            employee={managingEmployee} 
+            onBack={() => setManagingEmployee(null)} 
+            t={t}
+            lang={lang}
+        />
+    );
+  }
 
   return (
     <div className="pb-20">
-      {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -653,7 +657,7 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
                 {lang === 'ar' ? 'EN' : 'AR'}
             </button>
             <button 
-              onClick={handleAddNew}
+              onClick={() => setIsFormOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
             >
               <Plus size={18} />
@@ -672,29 +676,14 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 py-8">
-        
-        {permissionError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <div className="text-red-500 mt-1">
-              <AlertCircle size={24} />
-            </div>
-            <div>
-              <h3 className="text-red-800 font-bold mb-1">{t.alertTitle}</h3>
-              <p className="text-red-600 text-sm">
-                {t.alertMsg}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {employees.length === 0 && !permissionError ? (
+        {employees.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
             <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <UserPlus size={32} />
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-2">{t.noCards}</h3>
             <p className="text-slate-500 mb-6">{t.noCardsSub}</p>
-            <button onClick={handleAddNew} className="text-blue-600 font-bold hover:underline">
+            <button onClick={() => setIsFormOpen(true)} className="text-blue-600 font-bold hover:underline">
               {t.addFirst}
             </button>
           </div>
@@ -704,16 +693,10 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
               <EmployeeCard 
                 key={emp.id} 
                 employee={emp} 
-                userId={user.uid}
-                onDelete={() => handleDelete(emp)}
-                onEdit={() => handleEdit(emp)}
-                onShowQR={() => setSelectedEmployee(emp)}
-                onShowAnalytics={() => setAnalyticsEmployee(emp)}
-                onShowLeads={() => setLeadsEmployee(emp)}
-                onPreview={() => setPreviewEmployee(emp)} 
-                onManageProducts={() => setProductManagerEmployee(emp)}
-                onManageStories={() => setStoriesManagerEmployee(emp)} // جديد
                 t={t}
+                onDelete={() => handleDelete(emp)}
+                onManage={() => setManagingEmployee(emp)}
+                onPreview={() => setPreviewEmployee(emp)}
               />
             ))}
           </div>
@@ -723,61 +706,17 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
       {isFormOpen && (
         <EmployeeForm 
           onClose={() => setIsFormOpen(false)} 
-          initialData={editingEmployee}
-          userId={user.uid}
-          t={t}
-        />
-      )}
-
-      {selectedEmployee && (
-        <QRModal 
-          employee={selectedEmployee} 
-          userId={user.uid}
-          onClose={() => setSelectedEmployee(null)} 
-          t={t}
-        />
-      )}
-
-      {analyticsEmployee && (
-        <AnalyticsModal 
-          employee={analyticsEmployee}
-          onClose={() => setAnalyticsEmployee(null)}
-          t={t}
-        />
-      )}
-
-      {leadsEmployee && (
-        <LeadsListModal
-          userId={user.uid}
-          employee={leadsEmployee}
-          onClose={() => setLeadsEmployee(null)}
+          initialData={null} 
+          userId={user.uid} 
           t={t}
         />
       )}
 
       {previewEmployee && (
-        <PreviewModal
-          employee={previewEmployee}
-          userId={user.uid}
-          onClose={() => setPreviewEmployee(null)}
-          t={t}
-        />
-      )}
-
-      {productManagerEmployee && (
-        <ProductsManagerModal
-          userId={user.uid}
-          employee={productManagerEmployee}
-          onClose={() => setProductManagerEmployee(null)}
-          t={t}
-        />
-      )}
-
-      {storiesManagerEmployee && (
-        <StoriesManagerModal
-          userId={user.uid}
-          employee={storiesManagerEmployee}
-          onClose={() => setStoriesManagerEmployee(null)}
+        <PreviewModal 
+          employee={previewEmployee} 
+          userId={user.uid} 
+          onClose={() => setPreviewEmployee(null)} 
           t={t}
         />
       )}
@@ -786,23 +725,13 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
 }
 
 // --- بطاقة الموظف في القائمة ---
-function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads, onPreview, onManageProducts, onManageStories, userId, t }) {
+function EmployeeCard({ employee, onDelete, onManage, onPreview, t }) {
   const themeColor = employee.themeColor || '#2563eb';
-  const views = employee.stats?.views || 0;
   const isCompany = employee.profileType === 'company';
-  
-  const templateName = {
-      'classic': t.classic,
-      'modern': t.modern,
-      'creative': t.creative,
-      'elegant': t.elegant,
-      'professional': t.professional,
-      'minimal': t.minimal
-  }[employee.template] || t.classic;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 relative group">
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
           {employee.photoUrl ? (
             <img 
@@ -824,125 +753,219 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
             <p className="text-sm text-slate-500 line-clamp-1">
               {isCompany ? (employee.jobTitle || t.company) : (employee.jobTitle || t.employee)}
             </p>
-            {employee.slug && (
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded mt-1 inline-block font-mono">
-                /{employee.slug}
-              </span>
-            )}
           </div>
         </div>
-        <div className="flex gap-1">
-          <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={16} /></button>
-          <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
-        </div>
-      </div>
-
-      <div className="flex items-center flex-wrap gap-2 mb-4">
-          <span className={`text-xs px-2 py-1 rounded font-medium flex items-center gap-1 ${isCompany ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
-            {isCompany ? <Building2 size={12} /> : <User size={12} />}
-            {isCompany ? t.profileTypeComp : t.profileTypeEmp}
-          </span>
-          <span className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-500 font-medium">
-            {templateName}
-          </span>
-      </div>
-
-      <div className="flex items-center gap-4 mb-4 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg">
-        <div className="flex items-center gap-1">
-            <Activity size={14} className="text-blue-500" />
-            <span>{views} {t.views}</span>
-        </div>
-        <div className="flex items-center gap-1">
-            <MousePointerClick size={14} className="text-orange-500" />
-            <span>{Object.values(employee.stats?.clicks || {}).reduce((a, b) => a + b, 0)} {t.clicks}</span>
-        </div>
+        <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"><Trash2 size={16} /></button>
       </div>
       
-      {/* أزرار الإدارة الإضافية */}
-      <div className="flex gap-2 mb-2">
-        <button 
-          onClick={onManageProducts}
-          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-colors"
-        >
-          <ShoppingBag size={14} />
-          {t.manageProducts}
-        </button>
-        <button 
-          onClick={onManageStories}
-          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold border border-slate-200 text-pink-600 hover:bg-pink-50 transition-colors"
-        >
-          <CircleDashed size={14} />
-          {t.manageStories}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2">
-        <button onClick={onShowAnalytics} className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors" title={t.stats}><BarChart3 size={16} /></button>
-        <button onClick={onShowLeads} className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors" title={t.leads}><Users size={16} /></button>
-        <button onClick={onShowQR} className="text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors opacity-90 hover:opacity-100" style={{ backgroundColor: themeColor }} title={t.code}><QrCode size={16} /></button>
-        <button onClick={onPreview} className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold border border-slate-200 text-blue-600 hover:bg-blue-50 transition-colors" title={t.preview}><Eye size={16} /></button>
+      <div className="flex gap-2 mt-4">
+          <button onClick={onManage} className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-800">{t.manageCard}</button>
+          <button onClick={onPreview} className="px-3 border border-slate-200 rounded-lg text-blue-600 hover:bg-blue-50"><Eye size={18}/></button>
       </div>
     </div>
   );
 }
 
-// --- نافذة إدارة المنتجات ---
-function ProductsManagerModal({ userId, employee, onClose, t }) {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '', imageUrl: '', link: '' });
-  const [isAdding, setIsAdding] = useState(false);
+// --- صفحة إدارة الموظف (Tabs System) ---
+function EmployeeManager({ userId, employee, onBack, t, lang }) {
+    const [activeTab, setActiveTab] = useState('stats');
+    
+    // Tabs configuration
+    const tabs = [
+        { id: 'stats', label: t.stats, icon: BarChart3 },
+        { id: 'settings', label: t.editData, icon: Settings },
+        { id: 'products', label: t.manageProducts, icon: ShoppingBag },
+        { id: 'stories', label: t.manageStories, icon: CircleDashed },
+        { id: 'leads', label: t.leads, icon: Users },
+        { id: 'qr', label: t.code, icon: QrCode },
+    ];
 
-  // جلب المنتجات
+    const renderContent = () => {
+        switch(activeTab) {
+            case 'stats': return <AnalyticsTab userId={userId} employee={employee} t={t} />;
+            case 'settings': return <EmployeeForm onClose={() => {}} initialData={employee} userId={userId} t={t} isEmbedded={true} />;
+            case 'products': return <ProductsTab userId={userId} employee={employee} t={t} />;
+            case 'stories': return <StoriesTab userId={userId} employee={employee} t={t} />;
+            case 'leads': return <LeadsTab userId={userId} employee={employee} t={t} />;
+            case 'qr': return <QRTab userId={userId} employee={employee} t={t} />;
+            default: return null;
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-50 z-40 flex flex-col">
+            {/* Header */}
+            <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shadow-sm z-10">
+                <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full"><ArrowLeft size={20} /></button>
+                <div className="flex-1">
+                    <h2 className="font-bold text-lg">{employee.name}</h2>
+                    <p className="text-xs text-slate-500">{employee.jobTitle}</p>
+                </div>
+            </div>
+
+            {/* Tabs Navigation (Scrollable) */}
+            <div className="bg-white border-b border-slate-200 overflow-x-auto no-scrollbar">
+                <div className="flex px-4 min-w-max">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <tab.icon size={16} />
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
+                {renderContent()}
+            </div>
+        </div>
+    );
+}
+
+// --- التبويبات (Tabs Components) ---
+
+function AnalyticsTab({ userId, employee, t }) {
+    // Reusing logic from AnalyticsModal but adapted for tab view
+    const stats = employee.stats || { views: 0, clicks: {}, countries: {}, heatmap: {} };
+    const clicks = stats.clicks || {};
+    const countries = stats.countries || {};
+    const getFlag = (code) => { if(!code || code==='Unknown') return '🌍'; return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt())); };
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+             <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm text-center">
+                    <div className="text-blue-500 mb-1 flex justify-center"><Activity size={24} /></div>
+                    <div className="text-2xl font-bold text-slate-800">{stats.views}</div>
+                    <div className="text-xs text-slate-500">{t.totalViews}</div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-orange-100 shadow-sm text-center">
+                    <div className="text-orange-500 mb-1 flex justify-center"><MousePointerClick size={24} /></div>
+                    <div className="text-2xl font-bold text-slate-800">{Object.values(clicks).reduce((a, b) => a + b, 0)}</div>
+                    <div className="text-xs text-slate-500">{t.totalClicks}</div>
+                </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-700 mb-3">{t.interactions}</h3>
+                <div className="space-y-3">
+                    {Object.entries(clicks).sort(([,a],[,b])=>b-a).map(([k,v])=>(
+                        <div key={k} className="flex justify-between text-sm py-2 border-b border-slate-50 last:border-0">
+                            <span>{k}</span><span className="font-bold bg-slate-100 px-2 rounded">{v}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-700 mb-3">{t.topCountries}</h3>
+                <div className="space-y-2">
+                    {Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => (
+                        <div key={code} className="flex justify-between text-sm py-1">
+                            <span>{getFlag(code)} {code}</span>
+                            <span className="font-bold">{count}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LeadsTab({ userId, employee, t }) {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setProducts(data);
+    const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'leads');
+    return onSnapshot(q, (snapshot) => {
+      setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.createdAt?.seconds - a.createdAt?.seconds));
       setLoading(false);
     });
-    return () => unsubscribe();
   }, [userId, employee.id]);
 
-  const handleAddProduct = async (e) => {
-    e.preventDefault();
-    setIsAdding(true);
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products'), {
-        ...newProduct,
-        createdAt: serverTimestamp()
-      });
-      setNewProduct({ name: '', price: '', description: '', imageUrl: '', link: '' });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  const handleDeleteProduct = async (prodId) => {
-    if (window.confirm('Delete product?')) {
-      try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', prodId));
-      } catch (error) { console.error(error); }
-    }
-  };
+  if(loading) return <div className="text-center py-8">{t.loading}</div>;
+  if(leads.length === 0) return <div className="text-center py-10 text-slate-400"><Users size={48} className="mx-auto mb-2 opacity-20" /><p>{t.noLeads}</p></div>;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white z-10">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <ShoppingBag size={20} className="text-indigo-600" />
-            {t.productsTitle}: {employee.name}
-          </h2>
-          <button onClick={onClose}><X size={20} /></button>
-        </div>
+    <div className="space-y-3 animate-in fade-in">
+        {leads.map(l => (
+            <div key={l.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-start">
+                <div>
+                    <div className="font-bold text-slate-800">{l.name}</div>
+                    <div className="text-sm text-slate-500 font-mono" dir="ltr">{l.phone}</div>
+                    {l.interest && <div className="text-xs text-indigo-600 mt-2 font-bold bg-indigo-50 inline-block px-2 py-1 rounded">{l.interest}</div>}
+                    <div className="text-xs text-slate-300 mt-1">{l.createdAt?.seconds ? new Date(l.createdAt.seconds * 1000).toLocaleDateString() : ''}</div>
+                </div>
+                <a href={`tel:${l.phone}`} className="p-2 bg-green-50 text-green-600 rounded-full hover:bg-green-100"><Phone size={18} /></a>
+            </div>
+        ))}
+    </div>
+  );
+}
 
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-           {/* نموذج الإضافة */}
-           <form onSubmit={handleAddProduct} className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+function QRTab({ userId, employee, t }) {
+    const getProfileUrl = () => {
+        if (employee.slug) return `${window.location.href.split('#')[0]}#${employee.slug}`;
+        return `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
+    };
+    const qrColor = employee.qrColor?.replace('#', '') || '000000';
+    const qrBgColor = employee.qrBgColor?.replace('#', '') || 'ffffff';
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(getProfileUrl())}&color=${qrColor}&bgcolor=${qrBgColor}`;
+    
+    const downloadQR = async () => {
+        try {
+          const response = await fetch(qrImageUrl);
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a'); link.href = url; link.download = `${employee.name}-qr.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        } catch (error) { window.alert('Error'); }
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center py-8 animate-in fade-in">
+            <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-100 mb-6">
+                <img src={qrImageUrl} alt="QR" className="w-64 h-64" />
+            </div>
+            <button onClick={downloadQR} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors">
+                <Download size={18} /> {t.code}
+            </button>
+            <p className="text-sm text-slate-400 mt-4 font-mono">{getProfileUrl()}</p>
+        </div>
+    );
+}
+
+function ProductsTab({ userId, employee, t }) {
+    const [products, setProducts] = useState([]);
+    const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '', imageUrl: '', link: '' });
+    const [isAdding, setIsAdding] = useState(false);
+  
+    useEffect(() => {
+      const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
+      return onSnapshot(q, (snapshot) => {
+        setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+      });
+    }, [userId, employee.id]);
+  
+    const handleAddProduct = async (e) => {
+      e.preventDefault(); setIsAdding(true);
+      try {
+        await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products'), { ...newProduct, createdAt: serverTimestamp() });
+        setNewProduct({ name: '', price: '', description: '', imageUrl: '', link: '' });
+      } catch (error) { console.error(error); } finally { setIsAdding(false); }
+    };
+
+    const handleDeleteProduct = async (prodId) => {
+        if(window.confirm('Delete?')) await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', prodId));
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+           <form onSubmit={handleAddProduct} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Plus size={16}/> {t.addProduct}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                  <input required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="px-3 py-2 border rounded-lg text-sm" placeholder={t.prodName} />
@@ -951,551 +974,145 @@ function ProductsManagerModal({ userId, employee, onClose, t }) {
                  <input value={newProduct.link} onChange={e => setNewProduct({...newProduct, link: e.target.value})} className="px-3 py-2 border rounded-lg text-sm dir-ltr" placeholder={t.prodLink} dir="ltr" />
                  <textarea value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="col-span-1 md:col-span-2 px-3 py-2 border rounded-lg text-sm" placeholder={t.prodDesc} rows="2"></textarea>
               </div>
-              <button type="submit" disabled={isAdding} className="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">
-                  {isAdding ? t.saving : t.save}
-              </button>
+              <button type="submit" disabled={isAdding} className="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">{isAdding ? t.saving : t.save}</button>
            </form>
 
-           {/* قائمة المنتجات */}
-           {loading ? <div className="text-center py-4">{t.loading}</div> : (
-              products.length === 0 ? <div className="text-center text-slate-400 py-4">{t.noProducts}</div> : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {products.map(prod => (
-                          <div key={prod.id} className="bg-white p-3 rounded-xl border border-slate-200 flex gap-3 relative group">
-                              <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                                  {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <Package className="w-full h-full p-4 text-slate-300" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <div className="font-bold text-slate-800 truncate">{prod.name}</div>
-                                  <div className="text-indigo-600 text-sm font-bold">{prod.price} {t.currency}</div>
-                                  <p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p>
-                              </div>
-                              <button onClick={() => handleDeleteProduct(prod.id)} className="absolute top-2 right-2 p-1.5 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Trash2 size={14} />
-                              </button>
-                          </div>
-                      ))}
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {products.map(prod => (
+                  <div key={prod.id} className="bg-white p-3 rounded-xl border border-slate-200 flex gap-3 relative group">
+                      <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+                          {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <Package className="w-full h-full p-4 text-slate-300" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <div className="font-bold text-slate-800 truncate">{prod.name}</div>
+                          <div className="text-indigo-600 text-sm font-bold">{prod.price} {t.currency}</div>
+                          <p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p>
+                      </div>
+                      <button onClick={() => handleDeleteProduct(prod.id)} className="absolute top-2 right-2 p-1.5 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
                   </div>
-              )
-           )}
+              ))}
+              {products.length === 0 && <div className="col-span-full text-center text-slate-400 py-4">{t.noProducts}</div>}
+           </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-// --- نافذة إدارة القصص (المحدثة) ---
-function StoriesManagerModal({ userId, employee, onClose, t }) {
-  const [stories, setStories] = useState([]);
-  const [products, setProducts] = useState([]); // قائمة المنتجات
-  const [newStory, setNewStory] = useState({ url: '', type: 'image', productId: '' }); // productId مضاف
-  const [isAdding, setIsAdding] = useState(false);
-
-  useEffect(() => {
-    // جلب القصص
-    const qStories = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
-    const unsubStories = onSnapshot(qStories, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setStories(data);
-    });
-
-    // جلب المنتجات للقائمة المنسدلة
-    const qProducts = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
-    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-       const data = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, link: doc.data().link, price: doc.data().price }));
-       setProducts(data);
-    });
-
-    return () => {
-        unsubStories();
-        unsubProducts();
-    };
-  }, [userId, employee.id]);
-
-  const handleAddStory = async (e) => {
-    e.preventDefault();
-    setIsAdding(true);
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories'), {
-        ...newStory,
-        createdAt: serverTimestamp(),
-        // حقول الإحصائيات الأولية
-        stats: { views: 0, clicks: 0, countries: {} }
+function StoriesTab({ userId, employee, t }) {
+    const [stories, setStories] = useState([]);
+    const [products, setProducts] = useState([]);
+    const [newStory, setNewStory] = useState({ url: '', type: 'image', productId: '' });
+    const [isAdding, setIsAdding] = useState(false);
+    const [storyStatsModal, setStoryStatsModal] = useState(null); // قصة محددة لعرض إحصائياتها
+  
+    useEffect(() => {
+      const qStories = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
+      const unsubStories = onSnapshot(qStories, (snapshot) => {
+        setStories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=> (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
       });
-      setNewStory({ url: '', type: 'image', productId: '' });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsAdding(false);
-    }
-  };
+      const qProducts = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
+      const unsubProducts = onSnapshot(qProducts, (snapshot) => {
+         setProducts(snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
+      });
+      return () => { unsubStories(); unsubProducts(); };
+    }, [userId, employee.id]);
 
-  const handleDeleteStory = async (storyId) => {
-    if (window.confirm('Delete story?')) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories', storyId));
-    }
-  };
+    const handleAdd = async (e) => {
+        e.preventDefault(); setIsAdding(true);
+        try {
+            await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories'), { ...newStory, createdAt: serverTimestamp(), stats: { views: 0, clicks: 0, countries: {}, devices: {} } });
+            setNewStory({ url: '', type: 'image', productId: '' });
+        } catch(e) { console.error(e); } finally { setIsAdding(false); }
+    };
+    
+    const handleDelete = async (id) => { if(window.confirm('Delete?')) await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories', id)); };
 
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white z-10">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <CircleDashed size={20} className="text-pink-600" />
-            {t.storiesTitle}: {employee.name}
-          </h2>
-          <button onClick={onClose}><X size={20} /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-           <form onSubmit={handleAddStory} className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+    return (
+        <div className="space-y-6 animate-in fade-in">
+           <form onSubmit={handleAdd} className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
               <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Plus size={16}/> {t.addStory}</h3>
               <div className="flex gap-2 mb-3">
                   <input required value={newStory.url} onChange={e => setNewStory({...newStory, url: e.target.value})} className="flex-1 px-3 py-2 border rounded-lg text-sm dir-ltr" placeholder={t.storyUrl} dir="ltr" />
-                  <select value={newStory.type} onChange={e => setNewStory({...newStory, type: e.target.value})} className="px-3 py-2 border rounded-lg text-sm bg-white">
-                      <option value="image">{t.typeImage}</option>
-                      <option value="video">{t.typeVideo}</option>
-                  </select>
+                  <select value={newStory.type} onChange={e => setNewStory({...newStory, type: e.target.value})} className="px-3 py-2 border rounded-lg text-sm bg-white"><option value="image">{t.typeImage}</option><option value="video">{t.typeVideo}</option></select>
               </div>
-              
-              {/* اختيار المنتج */}
               <div className="mb-3">
-                  <select 
-                    value={newStory.productId} 
-                    onChange={e => setNewStory({...newStory, productId: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                  >
+                  <select value={newStory.productId} onChange={e => setNewStory({...newStory, productId: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
                       <option value="">{t.linkProduct}</option>
-                      {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.price ? p.price : ''})</option>
-                      ))}
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
               </div>
-
-              <button type="submit" disabled={isAdding} className="w-full bg-pink-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50">
-                  {isAdding ? t.saving : t.save}
-              </button>
+              <button type="submit" disabled={isAdding} className="w-full bg-pink-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50">{isAdding ? t.saving : t.save}</button>
            </form>
 
            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {stories.map(story => (
                   <div key={story.id} className="relative aspect-[9/16] rounded-xl overflow-hidden group border border-slate-200 bg-black">
-                      {story.type === 'video' ? 
-                        <video src={story.url} className="w-full h-full object-cover" /> :
-                        <img src={story.url} className="w-full h-full object-cover" />
-                      }
-                      
-                      {/* طبقة الإحصائيات على القصة */}
+                      {story.type === 'video' ? <video src={story.url} className="w-full h-full object-cover" /> : <img src={story.url} className="w-full h-full object-cover" />}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-2">
                           <div className="flex items-center gap-1 mb-1"><Eye size={14}/> <span>{story.stats?.views || 0}</span></div>
                           <div className="flex items-center gap-1"><MousePointerClick size={14}/> <span>{story.stats?.clicks || 0}</span></div>
                           {story.productId && <div className="mt-2 text-xs bg-indigo-600 px-2 py-0.5 rounded">Product</div>}
+                          <button onClick={() => setStoryStatsModal(story)} className="mt-2 text-xs border border-white px-2 py-1 rounded hover:bg-white hover:text-black transition-colors">{t.stats}</button>
                       </div>
-
-                      <button onClick={() => handleDeleteStory(story.id)} className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          <Trash2 size={14} />
-                      </button>
-                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded-md backdrop-blur-sm">
-                         {story.type === 'video' ? <Video size={10} /> : <ImageIcon size={10} />}
-                      </div>
+                      <button onClick={() => handleDelete(story.id)} className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 size={14} /></button>
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded-md backdrop-blur-sm">{story.type === 'video' ? <Video size={10} /> : <ImageIcon size={10} />}</div>
                   </div>
               ))}
               {stories.length === 0 && <div className="col-span-full text-center text-slate-400 py-8">{t.noStories}</div>}
            </div>
+
+           {storyStatsModal && <StoryAnalyticsModal story={storyStatsModal} onClose={() => setStoryStatsModal(null)} t={t} />}
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-// --- عارض القصص (المحدث مع المنتجات والإحصائيات) ---
-function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLead, t }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const STORY_DURATION = 5000;
-  const viewLogged = useRef(new Set()); // لمنع تكرار تسجيل المشاهدة لنفس القصة في نفس الجلسة
+// --- نافذة تحليل القصة (جديد) ---
+function StoryAnalyticsModal({ story, onClose, t }) {
+    const stats = story.stats || { views: 0, clicks: 0, countries: {}, devices: {} };
+    const ctr = stats.views > 0 ? ((stats.clicks / stats.views) * 100).toFixed(1) : 0;
+    const countries = stats.countries || {};
+    const devices = stats.devices || {};
+    const getFlag = (code) => { if(!code || code==='Unknown') return '🌍'; return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt())); };
 
-  // دالة لتسجيل مشاهدة القصة
-  const logStoryView = async (index) => {
-    const story = stories[index];
-    if (!story || viewLogged.current.has(story.id)) return;
-    
-    viewLogged.current.add(story.id);
-    
-    try {
-        // تحديث إحصائيات القصة في Firestore
-        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', story.id);
-        
-        // الحصول على الدولة (مرة واحدة للجلسة أو لكل قصة إذا أردنا دقة عالية)
-        const res = await fetch('https://ipwho.is/');
-        const geo = await res.json();
-        const countryCode = geo.success ? geo.country_code : 'Unknown';
-
-        await setDoc(storyRef, {
-            stats: {
-                views: increment(1),
-                countries: {
-                    [countryCode]: increment(1)
-                }
-            }
-        }, { merge: true });
-    } catch (e) {
-        console.warn("Analytics error", e);
-    }
-  };
-
-  useEffect(() => {
-    // تسجيل مشاهدة القصة الحالية
-    logStoryView(currentIndex);
-
-    const timer = setInterval(() => {
-        setProgress(old => {
-            if (old >= 100) {
-                if (currentIndex < stories.length - 1) {
-                    setCurrentIndex(prev => prev + 1);
-                    return 0;
-                } else {
-                    clearInterval(timer);
-                    onClose();
-                    return 100;
-                }
-            }
-            return old + (100 / (STORY_DURATION / 100));
-        });
-    }, 100);
-    return () => clearInterval(timer);
-  }, [currentIndex, stories.length, onClose]);
-
-  useEffect(() => {
-      setProgress(0);
-  }, [currentIndex]);
-
-  const handleNext = () => {
-      if (currentIndex < stories.length - 1) setCurrentIndex(prev => prev + 1);
-      else onClose();
-  };
-
-  const handlePrev = () => {
-      if (currentIndex > 0) setCurrentIndex(prev => prev - 1);
-  };
-
-  const currentStory = stories[currentIndex];
-  // البحث عن المنتج المرتبط
-  const linkedProduct = currentStory.productId ? products.find(p => p.id === currentStory.productId) : null;
-
-  const handleProductClick = async () => {
-      // تسجيل النقرة في إحصائيات القصة
-      try {
-        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', currentStory.id);
-        await setDoc(storyRef, { stats: { clicks: increment(1) } }, { merge: true });
-      } catch(e) {}
-
-      // تنفيذ الأكشن
-      if (linkedProduct) {
-          if (linkedProduct.link) {
-              window.open(linkedProduct.link, '_blank');
-          } else {
-              // فتح نموذج الـ Lead (نمرر البيانات للأب ليفتح المودال)
-              trackLead(linkedProduct.name);
-          }
-      }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
-       <div className="relative w-full max-w-md h-full sm:h-[90vh] bg-black sm:rounded-2xl overflow-hidden shadow-2xl">
-          {/* Progress Bars */}
-          <div className="absolute top-4 left-0 right-0 z-20 flex gap-1 px-2">
-              {stories.map((_, idx) => (
-                  <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-white transition-all duration-100 ease-linear"
-                        style={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' }}
-                      ></div>
-                  </div>
-              ))}
-          </div>
-
-          {/* Close Button */}
-          <button onClick={onClose} className="absolute top-8 right-4 z-20 text-white opacity-80 hover:opacity-100">
-              <X size={24} />
-          </button>
-
-          {/* Navigation Overlay */}
-          <div className="absolute inset-0 z-10 flex">
-              <div className="flex-1 h-full" onClick={handlePrev}></div>
-              <div className="flex-1 h-full" onClick={handleNext}></div>
-          </div>
-
-          {/* Product Overlay (Action Button) */}
-          {linkedProduct && (
-              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full px-6 pointer-events-none">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleProductClick(); }}
-                    className="pointer-events-auto w-full bg-white/90 backdrop-blur text-black py-3 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 animate-bounce-slow"
-                  >
-                      <ShoppingBag size={18} />
-                      {t.viewProduct}: {linkedProduct.name}
-                  </button>
-              </div>
-          )}
-
-          {/* Content */}
-          <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-              {currentStory.type === 'video' ? (
-                  <video src={currentStory.url} autoPlay className="w-full h-full object-contain" />
-              ) : (
-                  <img src={currentStory.url} className="w-full h-full object-contain" />
-              )}
-          </div>
-       </div>
-    </div>
-  );
-}
-
-// --- صفحة البروفايل (محدثة مع التبويبات والقصص) ---
-function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
-  const [data, setData] = useState(null);
-  const [products, setProducts] = useState([]);
-  const [stories, setStories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('info'); // info, products
-  const [error, setError] = useState(null);
-  const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
-  const [leadInterest, setLeadInterest] = useState(''); // المنتج المهتم به
-  const [showWalletModal, setShowWalletModal] = useState(null);
-  const [isStoryOpen, setIsStoryOpen] = useState(false); // حالة القصة
-  const isLogged = useRef(false);
-
-  // جلب البيانات + المنتجات + القصص
-  useEffect(() => {
-    if (!user) return;
-    const fetchData = async () => {
-      try {
-        const empRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        const empSnap = await getDoc(empRef);
-        
-        if (empSnap.exists()) {
-          setData(empSnap.data());
-          
-          // جلب المنتجات
-          const prodRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'products');
-          const prodSnap = await import('firebase/firestore').then(mod => mod.getDocs(prodRef));
-          const prods = [];
-          prodSnap.forEach(d => prods.push({id: d.id, ...d.data()}));
-          setProducts(prods);
-
-          // جلب القصص
-          const storyRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'stories');
-          const storySnap = await import('firebase/firestore').then(mod => mod.getDocs(storyRef));
-          const storyList = [];
-          storySnap.forEach(d => storyList.push({id: d.id, ...d.data()}));
-          // ترتيب القصص
-          storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-          setStories(storyList);
-
-          // تسجيل التحليلات (مرة واحدة)
-          if (!isLogged.current) {
-            isLogged.current = true;
-            try {
-                const res = await fetch('https://ipwho.is/');
-                const geo = await res.json();
-                const countryCode = geo.success ? geo.country_code : 'Unknown';
-                const lat = geo.success ? geo.latitude : 0;
-                const lng = geo.success ? geo.longitude : 0;
-                const locationKey = `${Math.round(lat * 10) / 10}_${Math.round(lng * 10) / 10}`;
-                await setDoc(empRef, {
-                    stats: { views: increment(1), countries: { [countryCode]: increment(1) }, heatmap: { [locationKey]: increment(1) } }
-                }, { merge: true });
-            } catch (e) { /* ignore */ }
-          }
-        } else {
-          setError('لم يتم العثور على البطاقة');
-        }
-      } catch (err) {
-        setError('حدث خطأ أثناء تحميل البيانات');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [profileData, user]);
-
-  const trackClick = async (action) => {
-    try {
-        const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        await setDoc(docRef, { stats: { clicks: { [action]: increment(1) } } }, { merge: true });
-    } catch (e) { /* ignore */ }
-  };
-
-  const handleBuyProduct = (prod) => {
-      trackClick(`buy_${prod.name}`);
-      if (prod.link) {
-          window.open(prod.link, '_blank');
-      } else {
-          setLeadInterest(`${t.orderInterest} ${prod.name}`);
-          setIsLeadFormOpen(true);
-      }
-  };
-
-  const handleStoryAction = (productName) => {
-      setIsStoryOpen(false); // إغلاق القصص
-      setLeadInterest(`${t.orderInterest} ${productName}`);
-      setIsLeadFormOpen(true); // فتح الفورم
-  };
-
-  const downloadVCard = () => {
-    trackClick('save_contact');
-    if (!data) return;
-    const isCompany = data.profileType === 'company';
-    const org = isCompany ? data.name : (data.company || '');
-    const title = isCompany ? '' : (data.jobTitle || '');
-    const note = isCompany ? (data.jobTitle || '') : '';
-    const companyField = isCompany ? 'X-ABShowAs:COMPANY\n' : '';
-    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${data.name};;;;\nFN;CHARSET=UTF-8:${data.name}\n${companyField}TEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${title ? `TITLE;CHARSET=UTF-8:${title}\n` : ''}${org ? `ORG;CHARSET=UTF-8:${org}\n` : ''}${note ? `NOTE;CHARSET=UTF-8:${note}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}END:VCARD`;
-    const blob = new Blob([vcard], { type: 'text/vcard' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.setAttribute('download', `${data.name}.vcf`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-blue-600 rounded-full border-t-transparent"></div></div>;
-  if (error) return <div className="min-h-screen flex flex-col items-center justify-center p-4 text-red-500">{error}</div>;
-
-  const themeColor = data.themeColor || '#2563eb';
-  const template = data.template || 'classic';
-
-  const renderInfoTab = () => (
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="mt-16 text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
-            <p className="font-medium" style={{ color: themeColor }}>{data.jobTitle} {data.company && `| ${data.company}`}</p>
-            {/* Socials */}
-            <div className="flex justify-center gap-3 mt-4 mb-4 flex-wrap">
-                {data.facebook && <a href={data.facebook} target="_blank" onClick={() => trackClick('facebook')} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Facebook size={20} /></a>}
-                {data.twitter && <a href={data.twitter} target="_blank" onClick={() => trackClick('twitter')} className="p-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"><Twitter size={20} /></a>}
-                {data.instagram && <a href={data.instagram} target="_blank" onClick={() => trackClick('instagram')} className="p-2 bg-pink-600 text-white rounded-full hover:bg-pink-700 transition-colors"><Instagram size={20} /></a>}
-                {data.linkedin && <a href={data.linkedin} target="_blank" onClick={() => trackClick('linkedin')} className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-800 transition-colors"><Linkedin size={20} /></a>}
-                {data.youtube && <a href={data.youtube} target="_blank" onClick={() => trackClick('youtube')} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"><Youtube size={20} /></a>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <a href={`tel:${data.phone}`} onClick={() => trackClick('call')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Phone size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.call}</span></a>
-            <a href={`https://wa.me/${data.whatsapp}`} target="_blank" onClick={() => trackClick('whatsapp')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><MessageCircle size={20} className="text-emerald-500" /> <span className="font-bold">{t.whatsapp}</span></a>
-            {data.email && <a href={`mailto:${data.email}`} onClick={() => trackClick('email')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Mail size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.emailAction}</span></a>}
-            {data.website && <a href={data.website} target="_blank" onClick={() => trackClick('website')} className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><Globe size={20} style={{ color: themeColor }} /> <span className="font-bold">{t.websiteAction}</span></a>}
-            <button onClick={() => { setLeadInterest(''); setIsLeadFormOpen(true); }} className="col-span-2 flex items-center justify-center gap-2 bg-slate-900 text-white p-4 rounded-xl hover:bg-slate-800 transition-colors shadow-sm"><UserPlus size={20} /> <span className="font-bold">{t.exchangeContact}</span></button>
-            <button onClick={() => setShowWalletModal('apple')} className="col-span-1 flex items-center justify-center gap-2 bg-black text-white p-3 rounded-xl hover:bg-gray-800"><Wallet size={20} /><span className="font-bold text-xs">Apple</span></button>
-            <button onClick={() => setShowWalletModal('google')} className="col-span-1 flex items-center justify-center gap-2 bg-white text-black border border-slate-200 p-3 rounded-xl hover:bg-slate-50"><CreditCard size={20} className="text-blue-500" /><span className="font-bold text-xs">Google</span></button>
-            {data.cvUrl && <a href={data.cvUrl} target="_blank" onClick={() => trackClick('download_cv')} className="col-span-2 flex items-center justify-center gap-2 bg-slate-50 text-slate-700 p-4 rounded-xl hover:bg-slate-100 transition-colors border border-slate-100"><FileText size={20} className="text-orange-500" /> <span className="font-bold">{t.downloadCv}</span></a>}
-          </div>
-
-          <button onClick={downloadVCard} className="w-full text-white p-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 mb-8 transform active:scale-95" style={{ backgroundColor: themeColor }}><UserPlus size={20} /> {t.saveContact}</button>
-      </div>
-  );
-
-  const renderProductsTab = () => (
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 pb-8">
-          {products.length === 0 ? (
-              <div className="text-center text-slate-400 py-10">
-                  <ShoppingBag size={48} className="mx-auto mb-2 opacity-20" />
-                  <p>{t.noProducts}</p>
-              </div>
-          ) : (
-              <div className="grid grid-cols-1 gap-4">
-                  {products.map(prod => (
-                      <div key={prod.id} className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 flex flex-col">
-                          <div className="h-40 w-full bg-slate-100 relative">
-                              {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-slate-300"><ImageIcon size={32}/></div>}
-                              {prod.price && <div className="absolute top-2 right-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-sm">{prod.price} {t.currency}</div>}
-                          </div>
-                          <div className="p-4 flex-1 flex flex-col">
-                              <h3 className="font-bold text-slate-800 text-lg mb-1">{prod.name}</h3>
-                              <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{prod.description}</p>
-                              <button 
-                                onClick={() => handleBuyProduct(prod)}
-                                className="w-full py-2.5 rounded-lg text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: themeColor }}
-                              >
-                                {prod.link ? <ExternalLink size={16}/> : <ShoppingCart size={16}/>}
-                                {t.buy}
-                              </button>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          )}
-      </div>
-  );
-
-  const renderHeader = () => (
-    <div className="h-32 relative" style={{ background: `linear-gradient(to right, ${themeColor}, #1e293b)` }}>
-       <div className="absolute top-0 right-0 w-full h-full opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-       {data.bgVideoUrl && <video src={data.bgVideoUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-80" />}
-    </div>
-  );
-
-  // تحديث الصورة الشخصية لدعم حلقة القصص
-  const renderAvatar = () => {
-    const hasStories = stories.length > 0;
-    const ringClass = hasStories ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600" : "border-4 border-white";
-    
     return (
-        <div 
-            className={`absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`}
-            onClick={() => { if(hasStories) setIsStoryOpen(true); }}
-        >
-            <div className="w-full h-full rounded-full overflow-hidden border-2 border-white bg-white">
-                {data.profileVideoUrl ? 
-                    <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : 
-                    (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))
-                }
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto shadow-2xl p-6">
+                <div className="flex justify-between mb-6 border-b pb-4"><h3 className="font-bold text-lg">{t.storyStats}</h3><button onClick={onClose}><X size={20}/></button></div>
+                
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-blue-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-blue-600">{stats.views}</div><div className="text-xs text-slate-500">{t.views}</div></div>
+                    <div className="bg-green-50 p-3 rounded-xl text-center"><div className="text-2xl font-bold text-green-600">{stats.clicks}</div><div className="text-xs text-slate-500">{t.clicks}</div></div>
+                    <div className="col-span-2 bg-purple-50 p-3 rounded-xl text-center"><div className="text-xl font-bold text-purple-600">{ctr}%</div><div className="text-xs text-slate-500">{t.ctr}</div></div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.devices}</h4>
+                        <div className="space-y-2">
+                             <div className="flex justify-between text-sm"><span><Smartphone size={14} className="inline mr-1"/> {t.mobileDevice}</span><span>{devices.mobile || 0}</span></div>
+                             <div className="flex justify-between text-sm"><span><Monitor size={14} className="inline mr-1"/> {t.desktop}</span><span>{devices.desktop || 0}</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.topCountries}</h4>
+                        <div className="space-y-1">
+                            {Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => (
+                                <div key={code} className="flex justify-between text-sm border-b border-slate-50 py-1 last:border-0"><span>{getFlag(code)} {code}</span><span className="font-bold">{count}</span></div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative">
-       <button onClick={toggleLang} className="absolute top-4 right-4 z-50 bg-white px-3 py-2 rounded-full shadow-md text-slate-600 hover:text-blue-600 font-bold text-xs"><Globe size={16} /> {lang === 'ar' ? 'English' : 'عربي'}</button>
-       
-       <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative min-h-[80vh] flex flex-col">
-          {renderHeader()}
-          
-          {/* Tabs */}
-          {products.length > 0 && (
-              <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
-                  <button onClick={() => setActiveTab('info')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabInfo}</button>
-                  <button onClick={() => setActiveTab('products')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'products' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabProducts}</button>
-              </div>
-          )}
-
-          <div className="px-6 relative flex-1">
-             {activeTab === 'info' && renderAvatar()}
-             {activeTab === 'info' ? renderInfoTab() : renderProductsTab()}
-          </div>
-          
-          <div className="bg-slate-50 py-4 text-center text-slate-400 text-xs mt-auto">Digital Card System © 2024</div>
-       </div>
-
-      {isLeadFormOpen && <LeadCaptureModal adminId={profileData.adminId} employeeId={profileData.id} themeColor={themeColor} onClose={() => setIsLeadFormOpen(false)} onSuccess={() => trackClick('exchange_contact')} t={t} initialInterest={leadInterest} />}
-      {showWalletModal && <WalletPreviewModal type={showWalletModal} data={data} onClose={() => setShowWalletModal(null)} t={t} />}
-      {isStoryOpen && stories.length > 0 && <StoryViewer stories={stories} adminId={profileData.adminId} employeeId={profileData.id} onClose={() => setIsStoryOpen(false)} products={products} trackLead={handleStoryAction} t={t} />}
-    </div>
-  );
 }
 
-// --- نموذج إضافة/تعديل موظف ---
-function EmployeeForm({ onClose, initialData, userId, t }) {
+// --- نموذج الموظف (تم استعادته) ---
+function EmployeeForm({ onClose, initialData, userId, t, isEmbedded = false }) {
   const [formData, setFormData] = useState({
-    profileType: 'employee',
-    name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
+    profileType: 'employee', name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
     photoUrl: '', cvUrl: '', slug: '', 
     themeColor: '#2563eb', qrColor: '#000000', qrBgColor: '#ffffff',
-    template: 'classic', 
-    bgVideoUrl: '', 
-    profileVideoUrl: '', 
+    template: 'classic', bgVideoUrl: '', profileVideoUrl: '', 
     facebook: '', twitter: '', instagram: '', linkedin: '', youtube: '',
     stats: { views: 0, clicks: {}, countries: {}, heatmap: {} }
   });
@@ -1520,17 +1137,11 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
       
       if (formData.slug) {
          const cleanSlug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
-         if (cleanSlug !== formData.slug) {
-            setSlugError('يجب أن يحتوي الاسم المميز على أحرف إنجليزية وأرقام وشرطة فقط.');
-            setLoading(false); return;
-         }
+         if (cleanSlug !== formData.slug) { setSlugError('Invalid Slug'); setLoading(false); return; }
          if (cleanSlug !== oldSlug) {
              const slugDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', cleanSlug);
              const slugDocSnap = await getDoc(slugDocRef);
-             if (slugDocSnap.exists()) {
-                 setSlugError('هذا الاسم المميز مستخدم بالفعل.');
-                 setLoading(false); return;
-             }
+             if (slugDocSnap.exists()) { setSlugError('Slug Taken'); setLoading(false); return; }
          }
       }
 
@@ -1548,68 +1159,52 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', oldSlug));
       }
 
-      onClose();
+      if(!isEmbedded) onClose();
+      else window.alert('Saved!');
     } catch (error) {
-      console.error("Error saving:", error);
-      if (error.code === 'permission-denied') {
-          window.alert(t.permissionError);
-      } else {
-          window.alert(t.saveError);
-      }
+      console.error(error);
+      window.alert("Error Saving");
     } finally {
       setLoading(false);
     }
   };
 
-  const templates = [
-    { id: 'classic', name: t.classic },
-    { id: 'modern', name: t.modern },
-    { id: 'creative', name: t.creative },
-    { id: 'elegant', name: t.elegant },
-    { id: 'professional', name: t.professional },
-    { id: 'minimal', name: t.minimal },
-  ];
-
+  const templates = [{id:'classic',name:t.classic},{id:'modern',name:t.modern},{id:'creative',name:t.creative},{id:'elegant',name:t.elegant},{id:'professional',name:t.professional},{id:'minimal',name:t.minimal}];
   const isCompany = formData.profileType === 'company';
 
+  const Wrapper = isEmbedded ? 'div' : 'div';
+  const wrapperClass = isEmbedded ? '' : 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+  const contentClass = isEmbedded ? '' : 'bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl';
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-bold">{initialData ? t.editData : t.createCard}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} /></button>
-        </div>
+    <Wrapper className={wrapperClass}>
+      <div className={contentClass}>
+        {!isEmbedded && (
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+            <h2 className="text-lg font-bold">{initialData ? t.editData : t.createCard}</h2>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+        )}
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+        <form onSubmit={handleSubmit} className={isEmbedded ? "space-y-4" : "p-6 space-y-4"}>
+           <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
             <button type="button" onClick={() => setFormData({...formData, profileType: 'employee'})} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.profileType === 'employee' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}><User size={16} /> {t.profileTypeEmp}</button>
             <button type="button" onClick={() => setFormData({...formData, profileType: 'company'})} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.profileType === 'company' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}><Building2 size={16} /> {t.profileTypeComp}</button>
           </div>
 
           <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
              <label className="block text-sm font-bold text-indigo-900 mb-1 flex items-center gap-2"><LinkIcon size={16} /> {t.slugLabel}</label>
-             <p className="text-xs text-indigo-600 mb-2">{t.slugHint}</p>
              <div className="flex items-center bg-white border border-indigo-200 rounded-lg overflow-hidden"><span className="bg-indigo-100 text-indigo-600 text-xs px-3 py-3 font-mono border-l border-indigo-200">/ #</span><input type="text" dir="ltr" value={formData.slug} onChange={e => setFormData({...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '-')})} className="w-full px-3 py-2 text-sm outline-none font-mono" placeholder="your-name" /></div>
              {slugError && <p className="text-xs text-red-500 mt-1 font-bold">{slugError}</p>}
           </div>
 
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-3">
-            <div className="flex items-center gap-2 border-b border-indigo-200 pb-2 mb-2"><LayoutTemplate size={18} className="text-indigo-600" /><h3 className="text-sm font-bold text-indigo-800">{t.design}</h3></div>
-            <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">{t.template}</label>
-                <div className="grid grid-cols-3 gap-2">
-                    {templates.map(tmp => (
-                        <button key={tmp.id} type="button" onClick={() => setFormData({...formData, template: tmp.id})} className={`py-3 px-2 text-xs font-bold rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-1 relative ${formData.template === tmp.id ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200'}`}>
-                            {tmp.id !== 'classic' && <Crown size={10} className="absolute top-1 right-1 text-amber-500" />}{tmp.name}
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-                <div><label className="block text-xs font-bold text-slate-600 mb-1">{t.bgVideo}</label><input type="url" dir="ltr" value={formData.bgVideoUrl} onChange={e => setFormData({...formData, bgVideoUrl: e.target.value})} className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm outline-none" placeholder="MP4 URL" /></div>
-                <div><label className="block text-xs font-bold text-slate-600 mb-1">{t.profileVideo}</label><input type="url" dir="ltr" value={formData.profileVideoUrl} onChange={e => setFormData({...formData, profileVideoUrl: e.target.value})} className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm outline-none" placeholder="MP4 URL" /></div>
-            </div>
+             <div className="flex items-center gap-2 border-b border-indigo-200 pb-2 mb-2"><LayoutTemplate size={18} className="text-indigo-600" /><h3 className="text-sm font-bold text-indigo-800">{t.design}</h3></div>
+             <div className="grid grid-cols-3 gap-2">{templates.map(tmp => <button key={tmp.id} type="button" onClick={() => setFormData({...formData, template: tmp.id})} className={`py-3 px-2 text-xs font-bold rounded-xl border-2 ${formData.template === tmp.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`}>{tmp.name}</button>)}</div>
+             <div className="grid grid-cols-2 gap-3 mt-3">
+                 <input type="url" dir="ltr" value={formData.bgVideoUrl} onChange={e => setFormData({...formData, bgVideoUrl: e.target.value})} className="w-full px-2 py-1.5 rounded-lg border text-sm" placeholder={t.bgVideo} />
+                 <input type="url" dir="ltr" value={formData.profileVideoUrl} onChange={e => setFormData({...formData, profileVideoUrl: e.target.value})} className="w-full px-2 py-1.5 rounded-lg border text-sm" placeholder={t.profileVideo} />
+             </div>
           </div>
 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
@@ -1618,7 +1213,7 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
           </div>
 
           <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={isCompany ? t.compName : t.fullName} />
-          <div className="grid grid-cols-2 gap-4">
+           <div className="grid grid-cols-2 gap-4">
             <input required type="tel" dir="ltr" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.mobile} />
             <input type="tel" dir="ltr" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.whatsapp} />
           </div>
@@ -1636,166 +1231,135 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
           <div className="border-t pt-4">
             <h3 className="text-sm font-bold text-slate-700 mb-3">{t.socials}</h3>
             <div className="grid grid-cols-2 gap-3">
-              <input type="url" dir="ltr" value={formData.facebook} onChange={e => setFormData({...formData, facebook: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" placeholder="Facebook URL" />
-              <input type="url" dir="ltr" value={formData.twitter} onChange={e => setFormData({...formData, twitter: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" placeholder="Twitter / X URL" />
-              <input type="url" dir="ltr" value={formData.instagram} onChange={e => setFormData({...formData, instagram: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" placeholder="Instagram URL" />
-              <input type="url" dir="ltr" value={formData.linkedin} onChange={e => setFormData({...formData, linkedin: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" placeholder="LinkedIn URL" />
-              <input type="url" dir="ltr" value={formData.youtube} onChange={e => setFormData({...formData, youtube: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" placeholder="YouTube URL" />
+              <input type="url" dir="ltr" value={formData.facebook} onChange={e => setFormData({...formData, facebook: e.target.value})} className="w-full px-3 py-2 rounded-lg border text-sm" placeholder="Facebook URL" />
+              <input type="url" dir="ltr" value={formData.twitter} onChange={e => setFormData({...formData, twitter: e.target.value})} className="w-full px-3 py-2 rounded-lg border text-sm" placeholder="Twitter / X URL" />
+              <input type="url" dir="ltr" value={formData.instagram} onChange={e => setFormData({...formData, instagram: e.target.value})} className="w-full px-3 py-2 rounded-lg border text-sm" placeholder="Instagram URL" />
+              <input type="url" dir="ltr" value={formData.linkedin} onChange={e => setFormData({...formData, linkedin: e.target.value})} className="w-full px-3 py-2 rounded-lg border text-sm" placeholder="LinkedIn URL" />
+              <input type="url" dir="ltr" value={formData.youtube} onChange={e => setFormData({...formData, youtube: e.target.value})} className="w-full px-3 py-2 rounded-lg border text-sm" placeholder="YouTube URL" />
             </div>
           </div>
           
           <div className="pt-4"><button type="submit" disabled={loading} className="w-full text-white font-bold py-3 rounded-xl" style={{ backgroundColor: formData.themeColor }}>{loading ? t.saving : t.save}</button></div>
         </form>
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
-// --- المكونات المساعدة ---
-function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess, t }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+// --- عارض القصص (StoryViewer) ---
+function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLead, t }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const STORY_DURATION = 5000;
+  const viewLogged = useRef(new Set()); 
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const logStoryView = async (index) => {
+    const story = stories[index];
+    if (!story || viewLogged.current.has(story.id)) return;
+    
+    viewLogged.current.add(story.id);
+    
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const deviceType = isMobile ? 'mobile' : 'desktop';
+
     try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
-        name,
-        phone,
-        createdAt: serverTimestamp()
-      });
-      setSubmitted(true);
-      if (onSuccess) onSuccess();
-      setTimeout(onClose, 2000);
-    } catch (error) {
-      window.alert("Error");
-    } finally {
-      setLoading(false);
-    }
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', story.id);
+        const res = await fetch('https://ipwho.is/');
+        const geo = await res.json();
+        const countryCode = geo.success ? geo.country_code : 'Unknown';
+
+        await setDoc(storyRef, {
+            stats: {
+                views: increment(1),
+                countries: { [countryCode]: increment(1) },
+                devices: { [deviceType]: increment(1) }
+            }
+        }, { merge: true });
+    } catch (e) { console.warn("Analytics error", e); }
+  };
+
+  useEffect(() => {
+    logStoryView(currentIndex);
+    const timer = setInterval(() => {
+        setProgress(old => {
+            if (old >= 100) {
+                if (currentIndex < stories.length - 1) { setCurrentIndex(prev => prev + 1); return 0; } 
+                else { clearInterval(timer); onClose(); return 100; }
+            }
+            return old + (100 / (STORY_DURATION / 100));
+        });
+    }, 100);
+    return () => clearInterval(timer);
+  }, [currentIndex, stories.length, onClose]);
+
+  useEffect(() => { setProgress(0); }, [currentIndex]);
+
+  const handleNext = () => { if (currentIndex < stories.length - 1) setCurrentIndex(prev => prev + 1); else onClose(); };
+  const handlePrev = () => { if (currentIndex > 0) setCurrentIndex(prev => prev - 1); };
+
+  const currentStory = stories[currentIndex];
+  const linkedProduct = currentStory.productId ? products.find(p => p.id === currentStory.productId) : null;
+
+  const handleProductClick = async () => {
+      try {
+        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employee.id, 'stories', currentStory.id);
+        await setDoc(storyRef, { stats: { clicks: increment(1) } }, { merge: true });
+      } catch(e) {}
+
+      if (linkedProduct) {
+          if (linkedProduct.link) window.open(linkedProduct.link, '_blank');
+          else trackLead(linkedProduct.name);
+      }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
-        {submitted ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><UserPlus size={32} /></div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">{t.sentSuccess}</h3>
-            <p className="text-slate-500">{t.sentMsg}</p>
+    <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
+       <div className="relative w-full max-w-md h-full sm:h-[90vh] bg-black sm:rounded-2xl overflow-hidden shadow-2xl">
+          <div className="absolute top-4 left-0 right-0 z-20 flex gap-1 px-2">
+              {stories.map((_, idx) => (
+                  <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-white transition-all duration-100 ease-linear" style={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' }}></div>
+                  </div>
+              ))}
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="text-center mb-6"><h3 className="text-xl font-bold text-slate-800">{t.exchangeContact}</h3><p className="text-sm text-slate-500 mt-1">{t.shareData}</p></div>
-            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={t.leadName} />
-            <input type="tel" required dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.leadPhone} />
-            <button type="submit" disabled={loading} className="w-full text-white font-bold py-3 rounded-xl" style={{ backgroundColor: themeColor }}>{loading ? '...' : t.send}</button>
-          </form>
-        )}
-      </div>
+          <button onClick={onClose} className="absolute top-8 right-4 z-20 text-white opacity-80 hover:opacity-100"><X size={24} /></button>
+          <div className="absolute inset-0 z-10 flex"><div className="flex-1 h-full" onClick={handlePrev}></div><div className="flex-1 h-full" onClick={handleNext}></div></div>
+          {linkedProduct && (
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full px-6 pointer-events-none">
+                  <button onClick={(e) => { e.stopPropagation(); handleProductClick(); }} className="pointer-events-auto w-full bg-white/90 backdrop-blur text-black py-3 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 animate-bounce-slow">
+                      <ShoppingBag size={18} /> {t.viewProduct}: {linkedProduct.name}
+                  </button>
+              </div>
+          )}
+          <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+              {currentStory.type === 'video' ? <video src={currentStory.url} autoPlay className="w-full h-full object-contain" /> : <img src={currentStory.url} className="w-full h-full object-contain" />}
+          </div>
+       </div>
     </div>
   );
 }
 
-function WalletPreviewModal({ type, data, onClose, t }) {
-  const isApple = type === 'apple';
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-        <div className="p-6 text-center">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg" style={{ backgroundColor: isApple ? 'black' : 'white', border: isApple ? 'none' : '1px solid #eee' }}>
-            {isApple ? <Wallet size={32} className="text-white" /> : <CreditCard size={32} className="text-blue-500" />}
-          </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">{isApple ? t.addToApple : t.addToGoogle}</h3>
-          <p className="text-sm text-slate-500 mt-6 bg-slate-50 p-3 rounded-lg">{t.walletNote}</p>
-          <div className="mt-6 flex gap-3">
-            <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl">{t.cancel}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LeadsListModal({ userId, employee, onClose, t }) {
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'leads');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setLeads(data);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [userId, employee.id]);
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl p-6">
-        <div className="flex justify-between mb-4"><h2 className="text-lg font-bold">{t.leadsTitle}: {employee.name}</h2><button onClick={onClose}><X size={20} /></button></div>
-        {loading ? <div className="text-center py-4">{t.loading}</div> : leads.length === 0 ? <p className="text-center text-slate-500 py-4">{t.noLeads}</p> : 
-        <div className="space-y-3">
-            {leads.map(l => (
-                <div key={l.id} className="bg-slate-50 p-3 rounded flex justify-between items-start">
-                    <div>
-                        <div className="font-bold">{l.name}</div>
-                        <div className="text-sm text-slate-500" dir="ltr">{l.phone}</div>
-                        {l.interest && <div className="text-xs text-indigo-600 mt-1 font-bold bg-indigo-50 inline-block px-1 rounded">{l.interest}</div>}
-                    </div>
-                    <a href={`tel:${l.phone}`} className="p-2 bg-white rounded-full text-green-600 shadow-sm"><Phone size={18} /></a>
-                </div>
-            ))}
-        </div>}
-      </div>
-    </div>
-  );
-}
-
-function AnalyticsModal({ employee, onClose, t }) {
-    const [activeTab, setActiveTab] = useState('overview');
-    const stats = employee.stats || { views: 0, clicks: {}, countries: {}, heatmap: {} };
-    const clicks = stats.clicks || {};
-    const countries = stats.countries || {};
-    const heatmap = stats.heatmap || {};
-    const getFlag = (code) => { if(!code || code==='Unknown') return '🌍'; return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt())); };
-
+// --- Preview Modal ---
+function PreviewModal({ employee, userId, onClose, t }) {
+    const getProfileUrl = () => {
+      if (employee.slug) return `${window.location.href.split('#')[0]}#${employee.slug}`;
+      return `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
+    };
+  
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-                <div className="p-5 border-b border-slate-100 flex justify-between"><h2 className="text-lg font-bold">{t.stats}: {employee.name}</h2><button onClick={onClose}><X size={20} /></button></div>
-                <div className="flex border-b border-slate-100"><button onClick={() => setActiveTab('overview')} className={`flex-1 py-3 text-sm font-medium ${activeTab === 'overview' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500'}`}>{t.overview}</button><button onClick={() => setActiveTab('map')} className={`flex-1 py-3 text-sm font-medium ${activeTab === 'map' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500'}`}>{t.heatmap}</button></div>
-                <div className="p-6">
-                    {activeTab === 'overview' ? (
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4"><div className="bg-blue-50 p-4 rounded text-center"><div className="text-2xl font-bold">{stats.views}</div><div className="text-xs">{t.totalViews}</div></div><div className="bg-orange-50 p-4 rounded text-center"><div className="text-2xl font-bold">{Object.values(clicks).reduce((a,b)=>a+b,0)}</div><div className="text-xs">{t.totalClicks}</div></div></div>
-                            <div><h3 className="text-sm font-bold mb-2">{t.interactions}</h3>{Object.entries(clicks).sort(([,a],[,b])=>b-a).map(([k,v])=><div key={k} className="flex justify-between text-sm py-1 border-b border-slate-50"><span>{k}</span><span className="font-bold">{v}</span></div>)}</div>
-                            <div><h3 className="text-sm font-bold mb-2">{t.topCountries}</h3>{Object.entries(countries).sort(([,a],[,b])=>b-a).map(([code, count]) => <div key={code} className="flex justify-between text-sm py-1"><span>{getFlag(code)} {code}</span><span>{count}</span></div>)}</div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><MapIcon size={16} /> {t.scanLocations}</h3>
-                            <div className="relative w-full aspect-[2/1] bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/80/World_map_-_low_resolution.svg" className="absolute inset-0 w-full h-full object-cover opacity-30" alt="Map" />
-                                 {Object.entries(heatmap).map(([key, count]) => {
-                                     const [lat, lng] = key.split('_').map(Number);
-                                     const x = (lng + 180) * (100 / 360); const y = (90 - lat) * (100 / 180);
-                                     return <div key={key} className="absolute rounded-full bg-red-500/60" style={{ left: `${x}%`, top: `${y}%`, width: `${Math.min(20, 6+(count*2))}px`, height: `${Math.min(20, 6+(count*2))}px`, transform: 'translate(-50%, -50%)' }} title={`${count} ${t.views}`}></div>;
-                                 })}
-                            </div>
-                            <p className="text-xs text-slate-500 bg-blue-50 p-3 rounded-lg">{t.mapNote}</p>
-                        </div>
-                    )}
-                </div>
-            </div>
+      <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="relative w-full max-w-[380px] h-[750px] bg-black rounded-[40px] border-8 border-gray-800 shadow-2xl overflow-hidden flex flex-col">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-xl z-20"></div>
+          <div className="h-8 bg-black w-full z-10 flex justify-between items-center px-6 pt-1"><span className="text-white text-[10px]">9:41</span><div className="flex gap-1"><span className="block w-3 h-3 bg-white/20 rounded-full"></span><span className="block w-3 h-3 bg-white/20 rounded-full"></span></div></div>
+          <iframe src={getProfileUrl()} className="w-full h-full bg-white border-0" title="Card Preview" />
+          <button onClick={onClose} className="absolute top-4 right-4 z-50 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-sm"><X size={20} /></button>
+          <div className="h-6 bg-black w-full z-10 flex justify-center items-end pb-1"><div className="w-32 h-1 bg-white/30 rounded-full"></div></div>
         </div>
+      </div>
     );
 }
 
+// --- QR Modal ---
 function QRModal({ employee, userId, onClose, t }) {
   const getProfileUrl = () => {
     if (employee.slug) return `${window.location.href.split('#')[0]}#${employee.slug}`;
@@ -1826,22 +1390,3 @@ function QRModal({ employee, userId, onClose, t }) {
     </div>
   );
 }
-
-function PreviewModal({ employee, userId, onClose, t }) {
-    const getProfileUrl = () => {
-      if (employee.slug) return `${window.location.href.split('#')[0]}#${employee.slug}`;
-      return `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
-    };
-  
-    return (
-      <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div className="relative w-full max-w-[380px] h-[750px] bg-black rounded-[40px] border-8 border-gray-800 shadow-2xl overflow-hidden flex flex-col">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-xl z-20"></div>
-          <div className="h-8 bg-black w-full z-10 flex justify-between items-center px-6 pt-1"><span className="text-white text-[10px]">9:41</span><div className="flex gap-1"><span className="block w-3 h-3 bg-white/20 rounded-full"></span><span className="block w-3 h-3 bg-white/20 rounded-full"></span></div></div>
-          <iframe src={getProfileUrl()} className="w-full h-full bg-white border-0" title="Card Preview" />
-          <button onClick={onClose} className="absolute top-4 right-4 z-50 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-sm"><X size={20} /></button>
-          <div className="h-6 bg-black w-full z-10 flex justify-center items-end pb-1"><div className="w-32 h-1 bg-white/30 rounded-full"></div></div>
-        </div>
-      </div>
-    );
-  }
