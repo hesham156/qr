@@ -1,91 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-// Firestore imports removed/minimized as we are switching to API, but kept initialized just in case
-import { getFirestore } from 'firebase/firestore'; 
+import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc, getDocs } from 'firebase/firestore';
 import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon, ChevronDown } from 'lucide-react';
 
-// --- API Service Integration ---
-const API_URL = 'https://greenyellow-wombat-960712.hostingersite.com/wp-json/digicard/v1';
-
-// دالة مساعدة لجلب Token وإرسال الطلب
-const apiFetch = async (endpoint, options = {}) => {
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...options.headers,
-    };
-
-    if (user) {
-      // Force refresh token to ensure it's valid
-      const token = await user.getIdToken().catch(() => null);
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-    }
-
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      mode: 'cors', // Explicitly requesting CORS
-      headers,
-    });
-
-    if (!response.ok) {
-      // Attempt to parse error message from server
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`API Request Failed [${endpoint}]:`, error);
-    throw error;
-  }
-};
-
-export const api = {
-  // Employees
-  getEmployees: () => apiFetch('/employees'),
-  createEmployee: (data) => apiFetch('/employees', { method: 'POST', body: JSON.stringify(data) }),
-  updateEmployee: (id, data) => apiFetch(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteEmployee: (id) => apiFetch(`/employees/${id}`, { method: 'DELETE' }),
-
-  // Products
-  getProducts: (empId) => apiFetch(`/employees/${empId}/products`),
-  addProduct: (empId, data) => apiFetch(`/employees/${empId}/products`, { method: 'POST', body: JSON.stringify(data) }),
-  deleteProduct: (id) => apiFetch(`/products/${id}`, { method: 'DELETE' }),
-
-  // Stories (Inferred standard REST pattern to support UI)
-  getStories: (empId) => apiFetch(`/employees/${empId}/stories`),
-  addStory: (empId, data) => apiFetch(`/employees/${empId}/stories`, { method: 'POST', body: JSON.stringify(data) }),
-  deleteStory: (empId, storyId) => apiFetch(`/employees/${empId}/stories/${storyId}`, { method: 'DELETE' }), // Adjusted assuming story endpoint needs ID
-
-  // Leads
-  getLeads: (empId) => apiFetch(`/employees/${empId}/leads`),
-  // Public Lead Capture
-  sendLead: (empId, data) => fetch(`${API_URL}/employees/${empId}/leads`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-  }).then(r => r.json()),
-
-  // Public Profile
-  getPublicProfileBySlug: (slug) => fetch(`${API_URL}/public/profile?slug=${slug}`).then(r => r.json()),
-  getPublicProfileById: (pid) => fetch(`${API_URL}/public/profile?pid=${pid}`).then(r => r.json()),
-  
-  // Analytics
-  trackView: (empId, countryCode) => fetch(`${API_URL}/employees/${empId}/track-view`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ countryCode })
-  }),
-};
-
-// --- تهيئة Firebase (للـ Auth فقط) ---
+// --- تهيئة Firebase ---
 let firebaseConfig;
 try {
   // eslint-disable-next-line no-undef
@@ -110,18 +29,21 @@ try {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-// const db = getFirestore(app); // No longer used directly
+const db = getFirestore(app);
 
+// eslint-disable-next-line no-undef
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 // eslint-disable-next-line no-undef
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
 // --- Helper: Get Localized Value ---
+// يتعامل مع البيانات سواء كانت نص عادي (قديم) أو كائن متعدد اللغات (جديد)
 const getLocalized = (val, lang) => {
   if (!val) return '';
   if (typeof val === 'object') {
     return val[lang] || val['ar'] || val['en'] || '';
   }
-  return val;
+  return val; // Fallback for old string data
 };
 
 // --- قاموس الترجمة (Translations) ---
@@ -183,7 +105,7 @@ const translations = {
     deleteConfirm: 'هل أنت متأكد من حذف هذا البروفايل؟',
     deleteError: 'حدث خطأ أثناء الحذف.',
     saveError: 'حدث خطأ أثناء الحفظ',
-    permissionError: 'خطأ في الاتصال بالخادم. يرجى التحقق من إعدادات CORS.',
+    permissionError: 'خطأ: ليس لديك صلاحية للكتابة في قاعدة البيانات.',
     contactMe: 'تواصل معي',
     saveContact: 'حفظ جهة الاتصال',
     exchangeContact: 'تبادل جهات الاتصال',
@@ -200,7 +122,7 @@ const translations = {
     sentSuccess: 'تم الإرسال بنجاح!',
     sentMsg: 'شكراً لك، سأقوم بالتواصل معك قريباً.',
     shareData: 'شارك بياناتك لنتواصل معك',
-    walletNote: 'هذه معاينة فقط.',
+    walletNote: 'هذه معاينة فقط. يتطلب التفعيل خادماً خلفياً.',
     addToApple: 'إضافة إلى Apple Wallet',
     addToGoogle: 'إضافة إلى Google Wallet',
     overview: 'نظرة عامة',
@@ -217,8 +139,8 @@ const translations = {
     elegant: 'أنيق',
     professional: 'احترافي',
     minimal: 'بسيط',
-    alertTitle: 'خطأ في الاتصال',
-    alertMsg: 'تعذر الاتصال بالـ API. يرجى التحقق من الخادم.',
+    alertTitle: 'تنبيه أمني',
+    alertMsg: 'يرجى التأكد من صلاحيات Firestore Rules.',
     installApp: 'تثبيت التطبيق',
     productsTitle: 'المنتجات والخدمات',
     manageProducts: 'إدارة المنتجات',
@@ -305,7 +227,7 @@ const translations = {
     deleteConfirm: 'Are you sure you want to delete this profile?',
     deleteError: 'Error occurred while deleting.',
     saveError: 'Error occurred while saving',
-    permissionError: 'API Connection Error. Check CORS settings.',
+    permissionError: 'Error: You do not have permission to write to the database.',
     contactMe: 'Contact Me',
     saveContact: 'Save Contact',
     exchangeContact: 'Exchange Contact',
@@ -322,7 +244,7 @@ const translations = {
     sentSuccess: 'Sent Successfully!',
     sentMsg: 'Thank you, I will contact you soon.',
     shareData: 'Share your info to connect',
-    walletNote: 'This is a preview.',
+    walletNote: 'This is a preview. Actual implementation requires a backend.',
     addToApple: 'Add to Apple Wallet',
     addToGoogle: 'Add to Google Wallet',
     overview: 'Overview',
@@ -339,8 +261,8 @@ const translations = {
     elegant: 'Elegant',
     professional: 'Professional',
     minimal: 'Minimal',
-    alertTitle: 'Connection Error',
-    alertMsg: 'Unable to connect to API. Please check server.',
+    alertTitle: 'Security Alert',
+    alertMsg: 'Please check Firestore Rules permissions.',
     installApp: 'Install App',
     productsTitle: 'Products & Services',
     manageProducts: 'Manage Products',
@@ -376,7 +298,7 @@ const translations = {
 export default function App() {
   const [user, setUser] = useState(null);
   const [viewMode, setViewMode] = useState('loading'); // loading, login, dashboard, profile
-  const [profileData, setProfileData] = useState({ id: null, type: null, slug: null });
+  const [profileData, setProfileData] = useState({ id: null, adminId: null });
   const [lang, setLang] = useState('ar'); 
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   
@@ -449,13 +371,13 @@ export default function App() {
   const checkRoute = (currentUser) => {
     const hashString = window.location.hash.substring(1); 
     
-    // 1. الرابط الافتراضي (Legacy ID based)
+    // 1. الرابط الافتراضي
     if (hashString.includes('uid=') && hashString.includes('pid=')) {
       const params = new URLSearchParams(hashString);
       const pid = params.get('pid');
-      const uid = params.get('uid'); // We might not need uid anymore if API handles it by PID
-      if (pid) {
-        setProfileData({ id: pid, type: 'id' });
+      const uid = params.get('uid');
+      if (pid && uid) {
+        setProfileData({ id: pid, adminId: uid });
         setViewMode('profile');
         if (!currentUser) signInAnonymously(auth).catch(console.error);
         return;
@@ -463,10 +385,20 @@ export default function App() {
     } 
     // 2. الرابط المختصر (Slug)
     else if (hashString && !hashString.includes('=')) {
-        setProfileData({ slug: hashString, type: 'slug' });
-        setViewMode('profile');
-        if (!currentUser) signInAnonymously(auth).catch(console.error);
-        return;
+        try {
+            const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', hashString);
+            getDoc(slugRef).then(slugSnap => {
+                if (slugSnap.exists()) {
+                    const data = slugSnap.data();
+                    setProfileData({ id: data.targetEmpId, adminId: data.targetUid });
+                    setViewMode('profile');
+                    if (!currentUser) signInAnonymously(auth).catch(console.error);
+                }
+            });
+            return;
+        } catch (e) {
+            console.error("Error fetching slug:", e);
+        }
     }
 
     // 3. التوجيه الافتراضي
@@ -527,7 +459,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {viewMode === 'profile' ? (
-        <ProfileView profileRef={profileData} user={user} lang={lang} toggleLang={toggleLang} t={t} />
+        <ProfileView data={profileData} user={user} lang={lang} toggleLang={toggleLang} t={t} />
       ) : viewMode === 'login' ? (
         <LoginView lang={lang} toggleLang={toggleLang} t={t} />
       ) : (
@@ -660,45 +592,36 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
   const [previewEmployee, setPreviewEmployee] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
-  const [apiError, setApiError] = useState(null); // New state for detailed API errors
   const [productManagerEmployee, setProductManagerEmployee] = useState(null);
-  const [storiesManagerEmployee, setStoriesManagerEmployee] = useState(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [storiesManagerEmployee, setStoriesManagerEmployee] = useState(null); 
 
-  const refreshData = () => setRefreshTrigger(prev => prev + 1);
-
-  // استبدال onSnapshot بـ API Fetch
   useEffect(() => {
     if (!user) return;
     
-    const fetchEmployees = async () => {
-      try {
-        setPermissionError(false);
-        setApiError(null);
-        const data = await api.getEmployees();
-        // Assuming data is array of objects
-        // Sort if needed, though API might handle it. Sorting here by createdAt (desc) if available
-        if (Array.isArray(data)) {
-            data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            setEmployees(data);
-        } else {
-            setEmployees([]);
-        }
-      } catch (error) {
-        console.error("Error fetching employees:", error);
-        setApiError(error.message);
+    const q = collection(db, 'artifacts', appId, 'users', user.uid, 'employees');
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPermissionError(false);
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setEmployees(docs);
+    }, (error) => {
+      console.error("Error fetching employees:", error);
+      if (error.code === 'permission-denied') {
         setPermissionError(true);
       }
-    };
+    });
 
-    fetchEmployees();
-  }, [user, refreshTrigger]);
+    return () => unsubscribe();
+  }, [user]);
 
   const handleDelete = async (emp) => {
     if (window.confirm(t.deleteConfirm)) {
       try {
-        await api.deleteEmployee(emp.id);
-        refreshData();
+        if (emp.slug) {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', emp.slug));
+        }
+        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', emp.id));
       } catch (e) {
         console.error("Error deleting:", e);
         window.alert(t.deleteError);
@@ -769,16 +692,11 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
             <div className="text-red-500 mt-1">
               <AlertCircle size={24} />
             </div>
-            <div className="flex-1">
+            <div>
               <h3 className="text-red-800 font-bold mb-1">{t.alertTitle}</h3>
               <p className="text-red-600 text-sm">
-                {apiError || t.alertMsg}
+                {t.alertMsg}
               </p>
-              {apiError && apiError.includes('Failed to fetch') && (
-                  <p className="text-xs text-red-500 mt-2 bg-red-100 p-2 rounded">
-                      تلميح: قد يكون السبب منع **CORS**. يرجى التأكد من السماح للنطاق الحالي بالوصول إلى الـ API في إعدادات خادم WordPress.
-                  </p>
-              )}
             </div>
           </div>
         )}
@@ -810,7 +728,7 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
                 onManageProducts={() => setProductManagerEmployee(emp)}
                 onManageStories={() => setStoriesManagerEmployee(emp)} 
                 t={t}
-                lang={lang}
+                lang={lang} // Pass current app language
               />
             ))}
           </div>
@@ -820,7 +738,6 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
       {isFormOpen && (
         <EmployeeForm 
           onClose={() => setIsFormOpen(false)} 
-          onSuccess={refreshData}
           initialData={editingEmployee}
           userId={user.uid}
           t={t}
@@ -988,7 +905,7 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
 }
 
 // --- صفحة البروفايل (محدثة مع التبويبات والقصص واللغة) ---
-function ProfileView({ profileRef, user, lang, toggleLang, t }) {
+function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   const [data, setData] = useState(null);
   const [products, setProducts] = useState([]);
   const [stories, setStories] = useState([]);
@@ -1003,31 +920,30 @@ function ProfileView({ profileRef, user, lang, toggleLang, t }) {
 
   // جلب البيانات + المنتجات + القصص
   useEffect(() => {
-    // Note: User might be anonymous here
+    if (!user) return;
     const fetchData = async () => {
       try {
-        let profileData;
-        if (profileRef.type === 'slug') {
-            profileData = await api.getPublicProfileBySlug(profileRef.slug);
-        } else if (profileRef.type === 'id') {
-            profileData = await api.getPublicProfileById(profileRef.id);
-        }
-
-        if (profileData) {
-          setData(profileData);
+        const empRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
+        const empSnap = await getDoc(empRef);
+        
+        if (empSnap.exists()) {
+          setData(empSnap.data());
           
-          // جلب المنتجات (API)
-          const prods = await api.getProducts(profileData.id);
+          // جلب المنتجات
+          const prodRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'products');
+          const prodSnap = await getDocs(prodRef);
+          const prods = [];
+          prodSnap.forEach(d => prods.push({id: d.id, ...d.data()}));
           setProducts(prods);
 
-          // جلب القصص (API inferred)
-          try {
-             const storyList = await api.getStories(profileData.id);
-             storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-             setStories(storyList);
-          } catch(e) {
-             console.log("Stories API not ready or empty");
-          }
+          // جلب القصص
+          const storyRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'stories');
+          const storySnap = await getDocs(storyRef);
+          const storyList = [];
+          storySnap.forEach(d => storyList.push({id: d.id, ...d.data()}));
+          // ترتيب القصص
+          storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+          setStories(storyList);
 
           // تسجيل التحليلات (مرة واحدة)
           if (!isLogged.current) {
@@ -1036,26 +952,31 @@ function ProfileView({ profileRef, user, lang, toggleLang, t }) {
                 const res = await fetch('https://ipwho.is/');
                 const geo = await res.json();
                 const countryCode = geo.success ? geo.country_code : 'Unknown';
-                await api.trackView(profileData.id, countryCode);
+                const lat = geo.success ? geo.latitude : 0;
+                const lng = geo.success ? geo.longitude : 0;
+                const locationKey = `${Math.round(lat * 10) / 10}_${Math.round(lng * 10) / 10}`;
+                await setDoc(empRef, {
+                    stats: { views: increment(1), countries: { [countryCode]: increment(1) }, heatmap: { [locationKey]: increment(1) } }
+                }, { merge: true });
             } catch (e) { /* ignore */ }
           }
         } else {
           setError('لم يتم العثور على البطاقة');
         }
       } catch (err) {
-        console.error(err);
         setError('حدث خطأ أثناء تحميل البيانات');
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [profileRef]);
+  }, [profileData, user]);
 
   const trackClick = async (action) => {
-      // API currently only has trackView, but we can potentially expand. 
-      // For now, we just log or do nothing if API doesn't support generic events.
-      // If API supports generic events, call it here.
+    try {
+        const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
+        await setDoc(docRef, { stats: { clicks: { [action]: increment(1) } } }, { merge: true });
+    } catch (e) { /* ignore */ }
   };
 
   const handleBuyProduct = (prod) => {
@@ -1266,7 +1187,7 @@ function LanguageInput({ label, value, onChange, placeholder, t }) {
 }
 
 // --- نموذج إضافة/تعديل موظف ---
-function EmployeeForm({ onClose, onSuccess, initialData, userId, t }) {
+function EmployeeForm({ onClose, initialData, userId, t }) {
   const [formData, setFormData] = useState({
     profileType: 'employee',
     name: { ar: '', en: '' }, // Initialize as object
@@ -1306,30 +1227,48 @@ function EmployeeForm({ onClose, onSuccess, initialData, userId, t }) {
     setSlugError('');
     
     try {
+      const collectionRef = collection(db, 'artifacts', appId, 'users', userId, 'employees');
       let empId = initialData?.id;
+      let oldSlug = initialData?.slug;
       
-      // Clean slug
       if (formData.slug) {
          const cleanSlug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
          if (cleanSlug !== formData.slug) {
             setSlugError('يجب أن يحتوي الاسم المميز على أحرف إنجليزية وأرقام وشرطة فقط.');
             setLoading(false); return;
          }
-         // Note: API likely handles slug uniqueness check and returns error if duplicate.
+         if (cleanSlug !== oldSlug) {
+             const slugDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', cleanSlug);
+             const slugDocSnap = await getDoc(slugDocRef);
+             if (slugDocSnap.exists()) {
+                 setSlugError('هذا الاسم المميز مستخدم بالفعل.');
+                 setLoading(false); return;
+             }
+         }
       }
 
       if (empId) {
-        await api.updateEmployee(empId, formData);
+        await updateDoc(doc(collectionRef, empId), { ...formData, slug: formData.slug || '', updatedAt: serverTimestamp() });
       } else {
-        await api.createEmployee(formData);
+        const docRef = await addDoc(collectionRef, { ...formData, createdAt: serverTimestamp() });
+        empId = docRef.id;
       }
 
-      if (onSuccess) onSuccess();
+      if (formData.slug && formData.slug !== oldSlug) {
+          if (oldSlug) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', oldSlug));
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', formData.slug), { targetUid: userId, targetEmpId: empId });
+      } else if (!formData.slug && oldSlug) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', oldSlug));
+      }
+
       onClose();
     } catch (error) {
       console.error("Error saving:", error);
-      // Show error message from API if available
-      window.alert(error.message || t.saveError);
+      if (error.code === 'permission-denied') {
+          window.alert(t.permissionError);
+      } else {
+          window.alert(t.saveError);
+      }
     } finally {
       setLoading(false);
     }
@@ -1466,7 +1405,11 @@ function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess,
     e.preventDefault();
     setLoading(true);
     try {
-      await api.sendLead(employeeId, { name, phone });
+      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
+        name,
+        phone,
+        createdAt: serverTimestamp()
+      });
       setSubmitted(true);
       if (onSuccess) onSuccess();
       setTimeout(onClose, 2000);
