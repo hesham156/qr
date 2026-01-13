@@ -1185,7 +1185,7 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
     
     return (
         <div 
-            className={`absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`}
+            className={`t-[10px] absolute right-1/2 translate-x-1/2 -bottom-12 w-24 h-24 rounded-full shadow-md bg-white flex items-center justify-center text-3xl font-bold text-slate-500 cursor-pointer ${ringClass}`}
             onClick={() => { if(hasStories) setIsStoryOpen(true); }}
         >
             <div className="w-full h-full rounded-full overflow-hidden border-2 border-white bg-white">
