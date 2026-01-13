@@ -139,6 +139,11 @@ const translations = {
     elegant: 'أنيق',
     professional: 'احترافي',
     minimal: 'بسيط',
+    gradient: 'متدرج',
+    neon: 'نيون',
+    luxury: 'فاخر',
+    glassmorphism: 'زجاجي',
+    cyberpunk: 'سايبر بانك',
     alertTitle: 'تنبيه أمني',
     alertMsg: 'يرجى التأكد من صلاحيات Firestore Rules.',
     installApp: 'تثبيت التطبيق',
@@ -261,6 +266,11 @@ const translations = {
     elegant: 'Elegant',
     professional: 'Professional',
     minimal: 'Minimal',
+    gradient: 'Gradient',
+    neon: 'Neon',
+    luxury: 'Luxury',
+    glassmorphism: 'Glassmorphism',
+    cyberpunk: 'Cyberpunk',
     alertTitle: 'Security Alert',
     alertMsg: 'Please check Firestore Rules permissions.',
     installApp: 'Install App',
@@ -812,7 +822,12 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
       'creative': t.creative,
       'elegant': t.elegant,
       'professional': t.professional,
-      'minimal': t.minimal
+      'minimal': t.minimal,
+      'gradient': t.gradient,
+      'neon': t.neon,
+      'luxury': t.luxury,
+      'glassmorphism': t.glassmorphism,
+      'cyberpunk': t.cyberpunk
   }[employee.template] || t.classic;
 
   const displayName = getLocalized(employee.name, lang);
@@ -1024,8 +1039,8 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   const renderInfoTab = () => (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="mt-16 text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-800">{displayName}</h1>
-            <p className="font-medium" style={{ color: themeColor }}>{displayJob} {displayCompany && `| ${displayCompany}`}</p>
+            <h1 className={`text-2xl font-bold ${themeStyles.textClass}`}>{displayName}</h1>
+            <p className="font-medium" style={{ color: data.template === 'neon' ? '#00ff00' : data.template === 'cyberpunk' ? '#00ffff' : data.template === 'luxury' ? '#fbbf24' : themeColor }}>{displayJob} {displayCompany && `| ${displayCompany}`}</p>
             {/* Socials */}
             <div className="flex justify-center gap-3 mt-4 mb-4 flex-wrap">
                 {data.facebook && <a href={data.facebook} target="_blank" onClick={() => trackClick('facebook')} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Facebook size={20} /></a>}
@@ -1051,28 +1066,45 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       </div>
   );
 
+  const getProductCardClass = () => {
+    switch(data.template) {
+      case 'glassmorphism':
+        return 'bg-white/30 backdrop-blur-xl border border-white/50 shadow-lg';
+      case 'luxury':
+        return 'bg-gradient-to-br from-slate-800 to-slate-900 border border-amber-600/30 shadow-lg';
+      case 'neon':
+        return 'bg-gray-800 border border-green-500/50 shadow-lg shadow-green-500/20';
+      case 'cyberpunk':
+        return 'bg-gray-900 border border-cyan-500/50 shadow-lg shadow-cyan-500/20';
+      case 'gradient':
+        return 'bg-gradient-to-br from-white via-slate-50 to-slate-100 border border-slate-200 shadow-md';
+      default:
+        return 'bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100';
+    }
+  };
+
   const renderProductsTab = () => (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 pb-8">
           {products.length === 0 ? (
-              <div className="text-center text-slate-400 py-10">
+              <div className={`text-center py-10 ${themeStyles.accentClass}`}>
                   <ShoppingBag size={48} className="mx-auto mb-2 opacity-20" />
                   <p>{t.noProducts}</p>
               </div>
           ) : (
               <div className="grid grid-cols-1 gap-4">
                   {products.map(prod => (
-                      <div key={prod.id} className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 flex flex-col">
+                      <div key={prod.id} className={`rounded-xl overflow-hidden flex flex-col ${getProductCardClass()}`}>
                           <div className="h-40 w-full bg-slate-100 relative">
                               {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-slate-300"><ImageIcon size={32}/></div>}
-                              {prod.price && <div className="absolute top-2 right-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-sm">{prod.price} {t.currency}</div>}
+                              {prod.price && <div className={`absolute top-2 right-2 text-xs font-bold px-2 py-1 rounded backdrop-blur-sm ${data.template === 'luxury' ? 'bg-amber-900/80 text-amber-100' : data.template === 'neon' ? 'bg-green-900/80 text-green-300' : data.template === 'cyberpunk' ? 'bg-cyan-900/80 text-cyan-300' : 'bg-black/70 text-white'}`}>{prod.price} {t.currency}</div>}
                           </div>
                           <div className="p-4 flex-1 flex flex-col">
-                              <h3 className="font-bold text-slate-800 text-lg mb-1">{prod.name}</h3>
-                              <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{prod.description}</p>
-                              <button 
+                              <h3 className={`font-bold text-lg mb-1 ${themeStyles.textClass}`}>{prod.name}</h3>
+                              <p className={`text-sm line-clamp-2 mb-4 flex-1 ${themeStyles.accentClass}`}>{prod.description}</p>
+                              <button
                                 onClick={() => handleBuyProduct(prod)}
-                                className="w-full py-2.5 rounded-lg text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: themeColor }}
+                                className={`w-full py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 ${data.template === 'neon' ? 'bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-500/50' : data.template === 'cyberpunk' ? 'bg-cyan-600 text-black hover:bg-cyan-500 shadow-lg shadow-cyan-500/50' : data.template === 'luxury' ? 'bg-amber-700 text-yellow-50 hover:bg-amber-600' : data.template === 'glassmorphism' ? 'bg-blue-500/80 text-white hover:bg-blue-600 backdrop-blur' : 'text-white hover:opacity-90'}`}
+                                style={!['neon', 'cyberpunk', 'luxury', 'glassmorphism'].includes(data.template) ? { backgroundColor: themeColor } : {}}
                               >
                                 {prod.link ? <ExternalLink size={16}/> : <ShoppingCart size={16}/>}
                                 {t.buy}
@@ -1085,8 +1117,63 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
       </div>
   );
 
+  const getThemeStyles = () => {
+    const template = data.template || 'classic';
+    const baseTheme = {
+      headerBg: `linear-gradient(to right, ${themeColor}, #1e293b)`,
+      headerClass: '',
+      containerClass: 'bg-white',
+      textClass: 'text-slate-800',
+      accentClass: 'text-slate-500'
+    };
+
+    switch(template) {
+      case 'gradient':
+        return {
+          ...baseTheme,
+          headerBg: `linear-gradient(135deg, ${themeColor}, #9333ea, #ec4899)`,
+          containerClass: 'bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50'
+        };
+      case 'neon':
+        return {
+          ...baseTheme,
+          headerBg: `linear-gradient(to right, #00ff00, #ff00ff, #00ffff)`,
+          containerClass: 'bg-gray-900',
+          textClass: 'text-white',
+          accentClass: 'text-green-400'
+        };
+      case 'luxury':
+        return {
+          ...baseTheme,
+          headerBg: `linear-gradient(to right, #1a1a2e, #16213e, #0f3460)`,
+          containerClass: 'bg-gradient-to-b from-zinc-900 via-slate-800 to-zinc-900',
+          textClass: 'text-yellow-50',
+          accentClass: 'text-amber-300'
+        };
+      case 'glassmorphism':
+        return {
+          ...baseTheme,
+          headerBg: `linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.2))`,
+          containerClass: 'bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100',
+          headerClass: 'backdrop-blur-md border-b border-white/20'
+        };
+      case 'cyberpunk':
+        return {
+          ...baseTheme,
+          headerBg: `linear-gradient(to right, #ff006e, #00f5ff)`,
+          containerClass: 'bg-gray-950',
+          textClass: 'text-white',
+          accentClass: 'text-cyan-400'
+        };
+      default:
+        return baseTheme;
+    }
+  };
+
+  const themeStyles = getThemeStyles();
+
   const renderHeader = () => (
-    <div className="h-32 relative" style={{ background: `linear-gradient(to right, ${themeColor}, #1e293b)` }}>
+    <div className={`h-32 relative ${themeStyles.headerClass}`} style={{ background: themeStyles.headerBg }}>
        <div className="absolute top-0 right-0 w-full h-full opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
        {data.bgVideoUrl && <video src={data.bgVideoUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-80" />}
     </div>
@@ -1112,10 +1199,10 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative">
-       <button onClick={toggleLang} className="absolute top-4 right-4 z-50 bg-white px-3 py-2 rounded-full shadow-md text-slate-600 hover:text-blue-600 font-bold text-xs"><Globe size={16} /> {lang === 'ar' ? 'English' : 'عربي'}</button>
-       
-       <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative min-h-[80vh] flex flex-col">
+    <div className={`min-h-screen flex items-center justify-center p-4 relative ${themeStyles.containerClass}`} style={data.template === 'glassmorphism' || data.template === 'neon' || data.template === 'cyberpunk' || data.template === 'luxury' ? {} : { backgroundColor: '#f1f5f9' }}>
+       <button onClick={toggleLang} className={`absolute top-4 right-4 z-50 px-3 py-2 rounded-full shadow-md font-bold text-xs transition-colors ${data.template === 'luxury' || data.template === 'cyberpunk' || data.template === 'neon' ? 'bg-slate-800 text-amber-300 hover:bg-slate-700' : 'bg-white text-slate-600 hover:text-blue-600'}`}><Globe size={16} /> {lang === 'ar' ? 'English' : 'عربي'}</button>
+
+       <div className={`${themeStyles.containerClass} w-full max-w-md rounded-3xl overflow-hidden relative min-h-[80vh] flex flex-col ${data.template === 'glassmorphism' ? 'backdrop-blur-xl border border-white/30 shadow-2xl' : data.template === 'luxury' ? 'shadow-2xl border border-amber-600/20' : data.template === 'neon' ? 'border-2 border-green-500 shadow-neon' : 'shadow-xl'}`}>
           {renderHeader()}
           
           {products.length > 0 && (
@@ -1281,6 +1368,11 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
     { id: 'elegant', name: t.elegant },
     { id: 'professional', name: t.professional },
     { id: 'minimal', name: t.minimal },
+    { id: 'gradient', name: t.gradient, premium: true },
+    { id: 'neon', name: t.neon, premium: true },
+    { id: 'luxury', name: t.luxury, premium: true },
+    { id: 'glassmorphism', name: t.glassmorphism, premium: true },
+    { id: 'cyberpunk', name: t.cyberpunk, premium: true },
   ];
 
   const isCompany = formData.profileType === 'company';
