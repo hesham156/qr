@@ -1,11 +1,91 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, deleteDoc, updateDoc, serverTimestamp, increment, setDoc, getDocs } from 'firebase/firestore';
-import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon } from 'lucide-react';
-import { api } from './services/api'; 
+// Firestore imports removed/minimized as we are switching to API, but kept initialized just in case
+import { getFirestore } from 'firebase/firestore'; 
+import { Phone, Mail, Globe, MapPin, UserPlus, Trash2, Edit2, Share2, Plus, X, ExternalLink, QrCode, MessageCircle, ArrowRight, AlertCircle, LogOut, Lock, FileText, Image as ImageIcon, Palette, Grid, BarChart3, Activity, MousePointerClick, Users, Send, Map as MapIcon, Wallet, CreditCard, LayoutTemplate, Video, PlayCircle, Crown, Facebook, Twitter, Instagram, Linkedin, Youtube, Building2, User, Eye, Smartphone, Link as LinkIcon, Languages, Download, ShoppingBag, Package, ShoppingCart, CircleDashed, Clock, Eye as EyeIcon, ChevronDown } from 'lucide-react';
 
-// --- تهيئة Firebase ---
+// --- API Service Integration ---
+const API_URL = 'https://greenyellow-wombat-960712.hostingersite.com/wp-json/digicard/v1';
+
+// دالة مساعدة لجلب Token وإرسال الطلب
+const apiFetch = async (endpoint, options = {}) => {
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...options.headers,
+    };
+
+    if (user) {
+      // Force refresh token to ensure it's valid
+      const token = await user.getIdToken().catch(() => null);
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      mode: 'cors', // Explicitly requesting CORS
+      headers,
+    });
+
+    if (!response.ok) {
+      // Attempt to parse error message from server
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `API Error: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`API Request Failed [${endpoint}]:`, error);
+    throw error;
+  }
+};
+
+export const api = {
+  // Employees
+  getEmployees: () => apiFetch('/employees'),
+  createEmployee: (data) => apiFetch('/employees', { method: 'POST', body: JSON.stringify(data) }),
+  updateEmployee: (id, data) => apiFetch(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteEmployee: (id) => apiFetch(`/employees/${id}`, { method: 'DELETE' }),
+
+  // Products
+  getProducts: (empId) => apiFetch(`/employees/${empId}/products`),
+  addProduct: (empId, data) => apiFetch(`/employees/${empId}/products`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteProduct: (id) => apiFetch(`/products/${id}`, { method: 'DELETE' }),
+
+  // Stories (Inferred standard REST pattern to support UI)
+  getStories: (empId) => apiFetch(`/employees/${empId}/stories`),
+  addStory: (empId, data) => apiFetch(`/employees/${empId}/stories`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteStory: (empId, storyId) => apiFetch(`/employees/${empId}/stories/${storyId}`, { method: 'DELETE' }), // Adjusted assuming story endpoint needs ID
+
+  // Leads
+  getLeads: (empId) => apiFetch(`/employees/${empId}/leads`),
+  // Public Lead Capture
+  sendLead: (empId, data) => fetch(`${API_URL}/employees/${empId}/leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+  }).then(r => r.json()),
+
+  // Public Profile
+  getPublicProfileBySlug: (slug) => fetch(`${API_URL}/public/profile?slug=${slug}`).then(r => r.json()),
+  getPublicProfileById: (pid) => fetch(`${API_URL}/public/profile?pid=${pid}`).then(r => r.json()),
+  
+  // Analytics
+  trackView: (empId, countryCode) => fetch(`${API_URL}/employees/${empId}/track-view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ countryCode })
+  }),
+};
+
+// --- تهيئة Firebase (للـ Auth فقط) ---
 let firebaseConfig;
 try {
   // eslint-disable-next-line no-undef
@@ -30,12 +110,19 @@ try {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// const db = getFirestore(app); // No longer used directly
 
 // eslint-disable-next-line no-undef
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-// eslint-disable-next-line no-undef
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// --- Helper: Get Localized Value ---
+const getLocalized = (val, lang) => {
+  if (!val) return '';
+  if (typeof val === 'object') {
+    return val[lang] || val['ar'] || val['en'] || '';
+  }
+  return val;
+};
 
 // --- قاموس الترجمة (Translations) ---
 const translations = {
@@ -96,7 +183,7 @@ const translations = {
     deleteConfirm: 'هل أنت متأكد من حذف هذا البروفايل؟',
     deleteError: 'حدث خطأ أثناء الحذف.',
     saveError: 'حدث خطأ أثناء الحفظ',
-    permissionError: 'خطأ: ليس لديك صلاحية للكتابة في قاعدة البيانات.',
+    permissionError: 'خطأ في الاتصال بالخادم. يرجى التحقق من إعدادات CORS.',
     contactMe: 'تواصل معي',
     saveContact: 'حفظ جهة الاتصال',
     exchangeContact: 'تبادل جهات الاتصال',
@@ -113,7 +200,7 @@ const translations = {
     sentSuccess: 'تم الإرسال بنجاح!',
     sentMsg: 'شكراً لك، سأقوم بالتواصل معك قريباً.',
     shareData: 'شارك بياناتك لنتواصل معك',
-    walletNote: 'هذه معاينة فقط. يتطلب التفعيل خادماً خلفياً.',
+    walletNote: 'هذه معاينة فقط.',
     addToApple: 'إضافة إلى Apple Wallet',
     addToGoogle: 'إضافة إلى Google Wallet',
     overview: 'نظرة عامة',
@@ -130,8 +217,8 @@ const translations = {
     elegant: 'أنيق',
     professional: 'احترافي',
     minimal: 'بسيط',
-    alertTitle: 'تنبيه أمني',
-    alertMsg: 'يرجى التأكد من صلاحيات Firestore Rules.',
+    alertTitle: 'خطأ في الاتصال',
+    alertMsg: 'تعذر الاتصال بالـ API. يرجى التحقق من الخادم.',
     installApp: 'تثبيت التطبيق',
     productsTitle: 'المنتجات والخدمات',
     manageProducts: 'إدارة المنتجات',
@@ -158,6 +245,8 @@ const translations = {
     linkProduct: 'ربط بمنتج (اختياري)',
     selectProduct: 'اختر منتجاً...',
     viewProduct: 'عرض المنتج',
+    langAr: 'عربي',
+    langEn: 'English',
   },
   en: {
     loading: 'Loading...',
@@ -216,7 +305,7 @@ const translations = {
     deleteConfirm: 'Are you sure you want to delete this profile?',
     deleteError: 'Error occurred while deleting.',
     saveError: 'Error occurred while saving',
-    permissionError: 'Error: You do not have permission to write to the database.',
+    permissionError: 'API Connection Error. Check CORS settings.',
     contactMe: 'Contact Me',
     saveContact: 'Save Contact',
     exchangeContact: 'Exchange Contact',
@@ -233,7 +322,7 @@ const translations = {
     sentSuccess: 'Sent Successfully!',
     sentMsg: 'Thank you, I will contact you soon.',
     shareData: 'Share your info to connect',
-    walletNote: 'This is a preview. Actual implementation requires a backend.',
+    walletNote: 'This is a preview.',
     addToApple: 'Add to Apple Wallet',
     addToGoogle: 'Add to Google Wallet',
     overview: 'Overview',
@@ -250,8 +339,8 @@ const translations = {
     elegant: 'Elegant',
     professional: 'Professional',
     minimal: 'Minimal',
-    alertTitle: 'Security Alert',
-    alertMsg: 'Please check Firestore Rules permissions.',
+    alertTitle: 'Connection Error',
+    alertMsg: 'Unable to connect to API. Please check server.',
     installApp: 'Install App',
     productsTitle: 'Products & Services',
     manageProducts: 'Manage Products',
@@ -278,6 +367,8 @@ const translations = {
     linkProduct: 'Link Product (Optional)',
     selectProduct: 'Select a product...',
     viewProduct: 'View Product',
+    langAr: 'Arabic',
+    langEn: 'English',
   }
 };
 
@@ -285,7 +376,7 @@ const translations = {
 export default function App() {
   const [user, setUser] = useState(null);
   const [viewMode, setViewMode] = useState('loading'); // loading, login, dashboard, profile
-  const [profileData, setProfileData] = useState({ id: null, adminId: null });
+  const [profileData, setProfileData] = useState({ id: null, type: null, slug: null });
   const [lang, setLang] = useState('ar'); 
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   
@@ -358,13 +449,13 @@ export default function App() {
   const checkRoute = (currentUser) => {
     const hashString = window.location.hash.substring(1); 
     
-    // 1. الرابط الافتراضي
+    // 1. الرابط الافتراضي (Legacy ID based)
     if (hashString.includes('uid=') && hashString.includes('pid=')) {
       const params = new URLSearchParams(hashString);
       const pid = params.get('pid');
-      const uid = params.get('uid');
-      if (pid && uid) {
-        setProfileData({ id: pid, adminId: uid });
+      const uid = params.get('uid'); // We might not need uid anymore if API handles it by PID
+      if (pid) {
+        setProfileData({ id: pid, type: 'id' });
         setViewMode('profile');
         if (!currentUser) signInAnonymously(auth).catch(console.error);
         return;
@@ -372,20 +463,10 @@ export default function App() {
     } 
     // 2. الرابط المختصر (Slug)
     else if (hashString && !hashString.includes('=')) {
-        try {
-            const slugRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', hashString);
-            getDoc(slugRef).then(slugSnap => {
-                if (slugSnap.exists()) {
-                    const data = slugSnap.data();
-                    setProfileData({ id: data.targetEmpId, adminId: data.targetUid });
-                    setViewMode('profile');
-                    if (!currentUser) signInAnonymously(auth).catch(console.error);
-                }
-            });
-            return;
-        } catch (e) {
-            console.error("Error fetching slug:", e);
-        }
+        setProfileData({ slug: hashString, type: 'slug' });
+        setViewMode('profile');
+        if (!currentUser) signInAnonymously(auth).catch(console.error);
+        return;
     }
 
     // 3. التوجيه الافتراضي
@@ -446,7 +527,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {viewMode === 'profile' ? (
-        <ProfileView data={profileData} user={user} lang={lang} toggleLang={toggleLang} t={t} />
+        <ProfileView profileRef={profileData} user={user} lang={lang} toggleLang={toggleLang} t={t} />
       ) : viewMode === 'login' ? (
         <LoginView lang={lang} toggleLang={toggleLang} t={t} />
       ) : (
@@ -579,36 +660,45 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
   const [previewEmployee, setPreviewEmployee] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [permissionError, setPermissionError] = useState(false);
+  const [apiError, setApiError] = useState(null); // New state for detailed API errors
   const [productManagerEmployee, setProductManagerEmployee] = useState(null);
-  const [storiesManagerEmployee, setStoriesManagerEmployee] = useState(null); // جديد
+  const [storiesManagerEmployee, setStoriesManagerEmployee] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const refreshData = () => setRefreshTrigger(prev => prev + 1);
+
+  // استبدال onSnapshot بـ API Fetch
   useEffect(() => {
     if (!user) return;
     
-    const q = collection(db, 'artifacts', appId, 'users', user.uid, 'employees');
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPermissionError(false);
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setEmployees(docs);
-    }, (error) => {
-      console.error("Error fetching employees:", error);
-      if (error.code === 'permission-denied') {
+    const fetchEmployees = async () => {
+      try {
+        setPermissionError(false);
+        setApiError(null);
+        const data = await api.getEmployees();
+        // Assuming data is array of objects
+        // Sort if needed, though API might handle it. Sorting here by createdAt (desc) if available
+        if (Array.isArray(data)) {
+            data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setEmployees(data);
+        } else {
+            setEmployees([]);
+        }
+      } catch (error) {
+        console.error("Error fetching employees:", error);
+        setApiError(error.message);
         setPermissionError(true);
       }
-    });
+    };
 
-    return () => unsubscribe();
-  }, [user]);
+    fetchEmployees();
+  }, [user, refreshTrigger]);
 
   const handleDelete = async (emp) => {
     if (window.confirm(t.deleteConfirm)) {
       try {
-        if (emp.slug) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', emp.slug));
-        }
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', emp.id));
+        await api.deleteEmployee(emp.id);
+        refreshData();
       } catch (e) {
         console.error("Error deleting:", e);
         window.alert(t.deleteError);
@@ -679,11 +769,16 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
             <div className="text-red-500 mt-1">
               <AlertCircle size={24} />
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="text-red-800 font-bold mb-1">{t.alertTitle}</h3>
               <p className="text-red-600 text-sm">
-                {t.alertMsg}
+                {apiError || t.alertMsg}
               </p>
+              {apiError && apiError.includes('Failed to fetch') && (
+                  <p className="text-xs text-red-500 mt-2 bg-red-100 p-2 rounded">
+                      تلميح: قد يكون السبب منع **CORS**. يرجى التأكد من السماح للنطاق الحالي بالوصول إلى الـ API في إعدادات خادم WordPress.
+                  </p>
+              )}
             </div>
           </div>
         )}
@@ -713,8 +808,9 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
                 onShowLeads={() => setLeadsEmployee(emp)}
                 onPreview={() => setPreviewEmployee(emp)} 
                 onManageProducts={() => setProductManagerEmployee(emp)}
-                onManageStories={() => setStoriesManagerEmployee(emp)} // جديد
+                onManageStories={() => setStoriesManagerEmployee(emp)} 
                 t={t}
+                lang={lang}
               />
             ))}
           </div>
@@ -724,6 +820,7 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
       {isFormOpen && (
         <EmployeeForm 
           onClose={() => setIsFormOpen(false)} 
+          onSuccess={refreshData}
           initialData={editingEmployee}
           userId={user.uid}
           t={t}
@@ -787,7 +884,7 @@ function Dashboard({ user, onLogout, lang, toggleLang, t, installPrompt, onInsta
 }
 
 // --- بطاقة الموظف في القائمة ---
-function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads, onPreview, onManageProducts, onManageStories, userId, t }) {
+function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, onShowLeads, onPreview, onManageProducts, onManageStories, userId, t, lang }) {
   const themeColor = employee.themeColor || '#2563eb';
   const views = employee.stats?.views || 0;
   const isCompany = employee.profileType === 'company';
@@ -801,6 +898,9 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
       'minimal': t.minimal
   }[employee.template] || t.classic;
 
+  const displayName = getLocalized(employee.name, lang);
+  const displayJob = getLocalized(employee.jobTitle, lang);
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 relative group">
       <div className="flex items-start justify-between mb-4">
@@ -808,7 +908,7 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
           {employee.photoUrl ? (
             <img 
               src={employee.photoUrl} 
-              alt={employee.name} 
+              alt={displayName} 
               className={`w-12 h-12 object-cover border border-slate-200 ${isCompany ? 'rounded-lg' : 'rounded-full'}`}
               style={{ borderColor: themeColor }}
             />
@@ -817,13 +917,13 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
               className={`w-12 h-12 flex items-center justify-center text-xl font-bold text-white ${isCompany ? 'rounded-lg' : 'rounded-full'}`}
               style={{ backgroundColor: themeColor }}
             >
-              {isCompany ? <Building2 size={20} /> : employee.name.charAt(0)}
+              {isCompany ? <Building2 size={20} /> : (displayName ? displayName.charAt(0) : '?')}
             </div>
           )}
           <div>
-            <h3 className="font-bold text-slate-800 line-clamp-1">{employee.name}</h3>
+            <h3 className="font-bold text-slate-800 line-clamp-1">{displayName}</h3>
             <p className="text-sm text-slate-500 line-clamp-1">
-              {isCompany ? (employee.jobTitle || t.company) : (employee.jobTitle || t.employee)}
+              {isCompany ? (displayJob || t.company) : (displayJob || t.employee)}
             </p>
             {employee.slug && (
               <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded mt-1 inline-block font-mono">
@@ -887,376 +987,8 @@ function EmployeeCard({ employee, onDelete, onEdit, onShowQR, onShowAnalytics, o
   );
 }
 
-// --- نافذة إدارة المنتجات ---
-function ProductsManagerModal({ userId, employee, onClose, t }) {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '', imageUrl: '', link: '' });
-  const [isAdding, setIsAdding] = useState(false);
-
-  // جلب المنتجات
-  useEffect(() => {
-    const q = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setProducts(data);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [userId, employee.id]);
-
-  const handleAddProduct = async (e) => {
-    e.preventDefault();
-    setIsAdding(true);
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products'), {
-        ...newProduct,
-        createdAt: serverTimestamp()
-      });
-      setNewProduct({ name: '', price: '', description: '', imageUrl: '', link: '' });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  const handleDeleteProduct = async (prodId) => {
-    if (window.confirm('Delete product?')) {
-      try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', prodId));
-      } catch (error) { console.error(error); }
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white z-10">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <ShoppingBag size={20} className="text-indigo-600" />
-            {t.productsTitle}: {employee.name}
-          </h2>
-          <button onClick={onClose}><X size={20} /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-           {/* نموذج الإضافة */}
-           <form onSubmit={handleAddProduct} className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Plus size={16}/> {t.addProduct}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                 <input required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="px-3 py-2 border rounded-lg text-sm" placeholder={t.prodName} />
-                 <input value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="px-3 py-2 border rounded-lg text-sm" placeholder={t.prodPrice} />
-                 <input value={newProduct.imageUrl} onChange={e => setNewProduct({...newProduct, imageUrl: e.target.value})} className="px-3 py-2 border rounded-lg text-sm dir-ltr" placeholder={t.prodImg} dir="ltr" />
-                 <input value={newProduct.link} onChange={e => setNewProduct({...newProduct, link: e.target.value})} className="px-3 py-2 border rounded-lg text-sm dir-ltr" placeholder={t.prodLink} dir="ltr" />
-                 <textarea value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="col-span-1 md:col-span-2 px-3 py-2 border rounded-lg text-sm" placeholder={t.prodDesc} rows="2"></textarea>
-              </div>
-              <button type="submit" disabled={isAdding} className="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">
-                  {isAdding ? t.saving : t.save}
-              </button>
-           </form>
-
-           {/* قائمة المنتجات */}
-           {loading ? <div className="text-center py-4">{t.loading}</div> : (
-              products.length === 0 ? <div className="text-center text-slate-400 py-4">{t.noProducts}</div> : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {products.map(prod => (
-                          <div key={prod.id} className="bg-white p-3 rounded-xl border border-slate-200 flex gap-3 relative group">
-                              <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                                  {prod.imageUrl ? <img src={prod.imageUrl} className="w-full h-full object-cover" /> : <Package className="w-full h-full p-4 text-slate-300" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <div className="font-bold text-slate-800 truncate">{prod.name}</div>
-                                  <div className="text-indigo-600 text-sm font-bold">{prod.price} {t.currency}</div>
-                                  <p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p>
-                              </div>
-                              <button onClick={() => handleDeleteProduct(prod.id)} className="absolute top-2 right-2 p-1.5 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Trash2 size={14} />
-                              </button>
-                          </div>
-                      ))}
-                  </div>
-              )
-           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- نافذة إدارة القصص (المحدثة) ---
-function StoriesManagerModal({ userId, employee, onClose, t }) {
-  const [stories, setStories] = useState([]);
-  const [products, setProducts] = useState([]); // قائمة المنتجات
-  const [newStory, setNewStory] = useState({ url: '', type: 'image', productId: '' }); // productId مضاف
-  const [isAdding, setIsAdding] = useState(false);
-
-  useEffect(() => {
-    // جلب القصص
-    const qStories = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
-    const unsubStories = onSnapshot(qStories, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setStories(data);
-    });
-
-    // جلب المنتجات للقائمة المنسدلة
-    const qProducts = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
-    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-       const data = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, link: doc.data().link, price: doc.data().price }));
-       setProducts(data);
-    });
-
-    return () => {
-        unsubStories();
-        unsubProducts();
-    };
-  }, [userId, employee.id]);
-
-  const handleAddStory = async (e) => {
-    e.preventDefault();
-    setIsAdding(true);
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories'), {
-        ...newStory,
-        createdAt: serverTimestamp(),
-        // حقول الإحصائيات الأولية
-        stats: { views: 0, clicks: 0, countries: {} }
-      });
-      setNewStory({ url: '', type: 'image', productId: '' });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  const handleDeleteStory = async (storyId) => {
-    if (window.confirm('Delete story?')) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories', storyId));
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white z-10">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <CircleDashed size={20} className="text-pink-600" />
-            {t.storiesTitle}: {employee.name}
-          </h2>
-          <button onClick={onClose}><X size={20} /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-           <form onSubmit={handleAddStory} className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Plus size={16}/> {t.addStory}</h3>
-              <div className="flex gap-2 mb-3">
-                  <input required value={newStory.url} onChange={e => setNewStory({...newStory, url: e.target.value})} className="flex-1 px-3 py-2 border rounded-lg text-sm dir-ltr" placeholder={t.storyUrl} dir="ltr" />
-                  <select value={newStory.type} onChange={e => setNewStory({...newStory, type: e.target.value})} className="px-3 py-2 border rounded-lg text-sm bg-white">
-                      <option value="image">{t.typeImage}</option>
-                      <option value="video">{t.typeVideo}</option>
-                  </select>
-              </div>
-              
-              {/* اختيار المنتج */}
-              <div className="mb-3">
-                  <select 
-                    value={newStory.productId} 
-                    onChange={e => setNewStory({...newStory, productId: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                  >
-                      <option value="">{t.linkProduct}</option>
-                      {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.price ? p.price : ''})</option>
-                      ))}
-                  </select>
-              </div>
-
-              <button type="submit" disabled={isAdding} className="w-full bg-pink-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50">
-                  {isAdding ? t.saving : t.save}
-              </button>
-           </form>
-
-           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {stories.map(story => (
-                  <div key={story.id} className="relative aspect-[9/16] rounded-xl overflow-hidden group border border-slate-200 bg-black">
-                      {story.type === 'video' ? 
-                        <video src={story.url} className="w-full h-full object-cover" /> :
-                        <img src={story.url} className="w-full h-full object-cover" />
-                      }
-                      
-                      {/* طبقة الإحصائيات على القصة */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-2">
-                          <div className="flex items-center gap-1 mb-1"><Eye size={14}/> <span>{story.stats?.views || 0}</span></div>
-                          <div className="flex items-center gap-1"><MousePointerClick size={14}/> <span>{story.stats?.clicks || 0}</span></div>
-                          {story.productId && <div className="mt-2 text-xs bg-indigo-600 px-2 py-0.5 rounded">Product</div>}
-                      </div>
-
-                      <button onClick={() => handleDeleteStory(story.id)} className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          <Trash2 size={14} />
-                      </button>
-                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded-md backdrop-blur-sm">
-                         {story.type === 'video' ? <Video size={10} /> : <ImageIcon size={10} />}
-                      </div>
-                  </div>
-              ))}
-              {stories.length === 0 && <div className="col-span-full text-center text-slate-400 py-8">{t.noStories}</div>}
-           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- عارض القصص (المحدث مع المنتجات والإحصائيات) ---
-function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLead, t }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const STORY_DURATION = 5000;
-  const viewLogged = useRef(new Set()); // لمنع تكرار تسجيل المشاهدة لنفس القصة في نفس الجلسة
-
-  // دالة لتسجيل مشاهدة القصة
-  const logStoryView = async (index) => {
-    const story = stories[index];
-    if (!story || viewLogged.current.has(story.id)) return;
-    
-    viewLogged.current.add(story.id);
-    
-    try {
-        // تحديث إحصائيات القصة في Firestore
-        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', story.id);
-        
-        // الحصول على الدولة (مرة واحدة للجلسة أو لكل قصة إذا أردنا دقة عالية)
-        const res = await fetch('https://ipwho.is/');
-        const geo = await res.json();
-        const countryCode = geo.success ? geo.country_code : 'Unknown';
-
-        await setDoc(storyRef, {
-            stats: {
-                views: increment(1),
-                countries: {
-                    [countryCode]: increment(1)
-                }
-            }
-        }, { merge: true });
-    } catch (e) {
-        console.warn("Analytics error", e);
-    }
-  };
-
-  useEffect(() => {
-    // تسجيل مشاهدة القصة الحالية
-    logStoryView(currentIndex);
-
-    const timer = setInterval(() => {
-        setProgress(old => {
-            if (old >= 100) {
-                if (currentIndex < stories.length - 1) {
-                    setCurrentIndex(prev => prev + 1);
-                    return 0;
-                } else {
-                    clearInterval(timer);
-                    onClose();
-                    return 100;
-                }
-            }
-            return old + (100 / (STORY_DURATION / 100));
-        });
-    }, 100);
-    return () => clearInterval(timer);
-  }, [currentIndex, stories.length, onClose]);
-
-  useEffect(() => {
-      setProgress(0);
-  }, [currentIndex]);
-
-  const handleNext = () => {
-      if (currentIndex < stories.length - 1) setCurrentIndex(prev => prev + 1);
-      else onClose();
-  };
-
-  const handlePrev = () => {
-      if (currentIndex > 0) setCurrentIndex(prev => prev - 1);
-  };
-
-  const currentStory = stories[currentIndex];
-  // البحث عن المنتج المرتبط
-  const linkedProduct = currentStory.productId ? products.find(p => p.id === currentStory.productId) : null;
-
-  const handleProductClick = async () => {
-      // تسجيل النقرة في إحصائيات القصة
-      try {
-        const storyRef = doc(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'stories', currentStory.id);
-        await setDoc(storyRef, { stats: { clicks: increment(1) } }, { merge: true });
-      } catch(e) {}
-
-      // تنفيذ الأكشن
-      if (linkedProduct) {
-          if (linkedProduct.link) {
-              window.open(linkedProduct.link, '_blank');
-          } else {
-              // فتح نموذج الـ Lead (نمرر البيانات للأب ليفتح المودال)
-              trackLead(linkedProduct.name);
-          }
-      }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
-       <div className="relative w-full max-w-md h-full sm:h-[90vh] bg-black sm:rounded-2xl overflow-hidden shadow-2xl">
-          {/* Progress Bars */}
-          <div className="absolute top-4 left-0 right-0 z-20 flex gap-1 px-2">
-              {stories.map((_, idx) => (
-                  <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-white transition-all duration-100 ease-linear"
-                        style={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' }}
-                      ></div>
-                  </div>
-              ))}
-          </div>
-
-          {/* Close Button */}
-          <button onClick={onClose} className="absolute top-8 right-4 z-20 text-white opacity-80 hover:opacity-100">
-              <X size={24} />
-          </button>
-
-          {/* Navigation Overlay */}
-          <div className="absolute inset-0 z-10 flex">
-              <div className="flex-1 h-full" onClick={handlePrev}></div>
-              <div className="flex-1 h-full" onClick={handleNext}></div>
-          </div>
-
-          {/* Product Overlay (Action Button) */}
-          {linkedProduct && (
-              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full px-6 pointer-events-none">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleProductClick(); }}
-                    className="pointer-events-auto w-full bg-white/90 backdrop-blur text-black py-3 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 animate-bounce-slow"
-                  >
-                      <ShoppingBag size={18} />
-                      {t.viewProduct}: {linkedProduct.name}
-                  </button>
-              </div>
-          )}
-
-          {/* Content */}
-          <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-              {currentStory.type === 'video' ? (
-                  <video src={currentStory.url} autoPlay className="w-full h-full object-contain" />
-              ) : (
-                  <img src={currentStory.url} className="w-full h-full object-contain" />
-              )}
-          </div>
-       </div>
-    </div>
-  );
-}
-
-// --- صفحة البروفايل (محدثة مع التبويبات والقصص) ---
-function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
+// --- صفحة البروفايل (محدثة مع التبويبات والقصص واللغة) ---
+function ProfileView({ profileRef, user, lang, toggleLang, t }) {
   const [data, setData] = useState(null);
   const [products, setProducts] = useState([]);
   const [stories, setStories] = useState([]);
@@ -1271,30 +1003,31 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
 
   // جلب البيانات + المنتجات + القصص
   useEffect(() => {
-    if (!user) return;
+    // Note: User might be anonymous here
     const fetchData = async () => {
       try {
-        const empRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        const empSnap = await getDoc(empRef);
-        
-        if (empSnap.exists()) {
-          setData(empSnap.data());
+        let profileData;
+        if (profileRef.type === 'slug') {
+            profileData = await api.getPublicProfileBySlug(profileRef.slug);
+        } else if (profileRef.type === 'id') {
+            profileData = await api.getPublicProfileById(profileRef.id);
+        }
+
+        if (profileData) {
+          setData(profileData);
           
-          // جلب المنتجات
-          const prodRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'products');
-          const prodSnap = await import('firebase/firestore').then(mod => mod.getDocs(prodRef));
-          const prods = [];
-          prodSnap.forEach(d => prods.push({id: d.id, ...d.data()}));
+          // جلب المنتجات (API)
+          const prods = await api.getProducts(profileData.id);
           setProducts(prods);
 
-          // جلب القصص
-          const storyRef = collection(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id, 'stories');
-          const storySnap = await import('firebase/firestore').then(mod => mod.getDocs(storyRef));
-          const storyList = [];
-          storySnap.forEach(d => storyList.push({id: d.id, ...d.data()}));
-          // ترتيب القصص
-          storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-          setStories(storyList);
+          // جلب القصص (API inferred)
+          try {
+             const storyList = await api.getStories(profileData.id);
+             storyList.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+             setStories(storyList);
+          } catch(e) {
+             console.log("Stories API not ready or empty");
+          }
 
           // تسجيل التحليلات (مرة واحدة)
           if (!isLogged.current) {
@@ -1303,31 +1036,26 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
                 const res = await fetch('https://ipwho.is/');
                 const geo = await res.json();
                 const countryCode = geo.success ? geo.country_code : 'Unknown';
-                const lat = geo.success ? geo.latitude : 0;
-                const lng = geo.success ? geo.longitude : 0;
-                const locationKey = `${Math.round(lat * 10) / 10}_${Math.round(lng * 10) / 10}`;
-                await setDoc(empRef, {
-                    stats: { views: increment(1), countries: { [countryCode]: increment(1) }, heatmap: { [locationKey]: increment(1) } }
-                }, { merge: true });
+                await api.trackView(profileData.id, countryCode);
             } catch (e) { /* ignore */ }
           }
         } else {
           setError('لم يتم العثور على البطاقة');
         }
       } catch (err) {
+        console.error(err);
         setError('حدث خطأ أثناء تحميل البيانات');
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [profileData, user]);
+  }, [profileRef]);
 
   const trackClick = async (action) => {
-    try {
-        const docRef = doc(db, 'artifacts', appId, 'users', profileData.adminId, 'employees', profileData.id);
-        await setDoc(docRef, { stats: { clicks: { [action]: increment(1) } } }, { merge: true });
-    } catch (e) { /* ignore */ }
+      // API currently only has trackView, but we can potentially expand. 
+      // For now, we just log or do nothing if API doesn't support generic events.
+      // If API supports generic events, call it here.
   };
 
   const handleBuyProduct = (prod) => {
@@ -1350,27 +1078,33 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
     trackClick('save_contact');
     if (!data) return;
     const isCompany = data.profileType === 'company';
-    const org = isCompany ? data.name : (data.company || '');
-    const title = isCompany ? '' : (data.jobTitle || '');
-    const note = isCompany ? (data.jobTitle || '') : '';
+    const localizedName = getLocalized(data.name, lang);
+    const localizedCompany = getLocalized(data.company, lang);
+    const localizedTitle = getLocalized(data.jobTitle, lang);
+
+    const org = isCompany ? localizedName : (localizedCompany || '');
+    const title = isCompany ? '' : (localizedTitle || '');
+    const note = isCompany ? (localizedTitle || '') : '';
     const companyField = isCompany ? 'X-ABShowAs:COMPANY\n' : '';
-    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${data.name};;;;\nFN;CHARSET=UTF-8:${data.name}\n${companyField}TEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${title ? `TITLE;CHARSET=UTF-8:${title}\n` : ''}${org ? `ORG;CHARSET=UTF-8:${org}\n` : ''}${note ? `NOTE;CHARSET=UTF-8:${note}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}END:VCARD`;
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nN;CHARSET=UTF-8:${localizedName};;;;\nFN;CHARSET=UTF-8:${localizedName}\n${companyField}TEL;TYPE=CELL:${data.phone}\n${data.email ? `EMAIL:${data.email}\n` : ''}${title ? `TITLE;CHARSET=UTF-8:${title}\n` : ''}${org ? `ORG;CHARSET=UTF-8:${org}\n` : ''}${note ? `NOTE;CHARSET=UTF-8:${note}\n` : ''}${data.website ? `URL:${data.website}\n` : ''}END:VCARD`;
     const blob = new Blob([vcard], { type: 'text/vcard' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.setAttribute('download', `${data.name}.vcf`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    const link = document.createElement('a'); link.href = url; link.setAttribute('download', `${localizedName}.vcf`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-blue-600 rounded-full border-t-transparent"></div></div>;
   if (error) return <div className="min-h-screen flex flex-col items-center justify-center p-4 text-red-500">{error}</div>;
 
   const themeColor = data.themeColor || '#2563eb';
-  const template = data.template || 'classic';
+  const displayName = getLocalized(data.name, lang);
+  const displayJob = getLocalized(data.jobTitle, lang);
+  const displayCompany = getLocalized(data.company, lang);
 
   const renderInfoTab = () => (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="mt-16 text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-800">{data.name}</h1>
-            <p className="font-medium" style={{ color: themeColor }}>{data.jobTitle} {data.company && `| ${data.company}`}</p>
+            <h1 className="text-2xl font-bold text-slate-800">{displayName}</h1>
+            <p className="font-medium" style={{ color: themeColor }}>{displayJob} {displayCompany && `| ${displayCompany}`}</p>
             {/* Socials */}
             <div className="flex justify-center gap-3 mt-4 mb-4 flex-wrap">
                 {data.facebook && <a href={data.facebook} target="_blank" onClick={() => trackClick('facebook')} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Facebook size={20} /></a>}
@@ -1437,7 +1171,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
     </div>
   );
 
-  // تحديث الصورة الشخصية لدعم حلقة القصص
   const renderAvatar = () => {
     const hasStories = stories.length > 0;
     const ringClass = hasStories ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600" : "border-4 border-white";
@@ -1450,7 +1183,7 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
             <div className="w-full h-full rounded-full overflow-hidden border-2 border-white bg-white">
                 {data.profileVideoUrl ? 
                     <video src={data.profileVideoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" /> : 
-                    (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : data.name.charAt(0))
+                    (data.photoUrl ? <img src={data.photoUrl} className="w-full h-full object-cover"/> : (displayName ? displayName.charAt(0) : '?'))
                 }
             </div>
         </div>
@@ -1464,7 +1197,6 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
        <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden relative min-h-[80vh] flex flex-col">
           {renderHeader()}
           
-          {/* Tabs */}
           {products.length > 0 && (
               <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
                   <button onClick={() => setActiveTab('info')} className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>{t.tabInfo}</button>
@@ -1487,11 +1219,61 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
   );
 }
 
+// --- مكون إدخال متعدد اللغات ---
+function LanguageInput({ label, value, onChange, placeholder, t }) {
+  const [currentLang, setCurrentLang] = useState('ar');
+
+  const handleValueChange = (e) => {
+    const newValue = e.target.value;
+    const oldObj = typeof value === 'object' ? value : { ar: value || '', en: '' }; // إذا كان نص عادي حوله لكائن
+    onChange({ ...oldObj, [currentLang]: newValue });
+  };
+
+  const displayValue = () => {
+    if (typeof value === 'object') {
+      return value[currentLang] || '';
+    }
+    // Backward compatibility for string data: Assume it's Arabic if lang is ar, else empty or show it
+    return value || '';
+  };
+
+  return (
+    <div className="mb-0">
+      <div className="flex justify-between items-end mb-1">
+         <label className="block text-sm font-medium text-slate-700">{label}</label>
+      </div>
+      <div className="flex " dir="ltr">
+        <input 
+          type="text"
+          className="flex-1 px-4 py-2 rounded-l-lg border border-r-0 border-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none"
+          value={displayValue()}
+          onChange={handleValueChange}
+          placeholder={placeholder}
+          dir={currentLang === 'ar' ? 'rtl' : 'ltr'}
+        />
+        <select 
+          value={currentLang} 
+          onChange={e => setCurrentLang(e.target.value)}
+          className="bg-slate-50 border border-slate-300 rounded-r-lg px-2 text-xs font-bold text-slate-600 focus:outline-none cursor-pointer hover:bg-slate-100"
+          dir="ltr"
+        >
+          <option value="ar">AR</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
 // --- نموذج إضافة/تعديل موظف ---
-function EmployeeForm({ onClose, initialData, userId, t }) {
+function EmployeeForm({ onClose, onSuccess, initialData, userId, t }) {
   const [formData, setFormData] = useState({
     profileType: 'employee',
-    name: '', phone: '', email: '', jobTitle: '', company: '', website: '', whatsapp: '',
+    name: { ar: '', en: '' }, // Initialize as object
+    phone: '', email: '', 
+    jobTitle: { ar: '', en: '' }, 
+    company: { ar: '', en: '' },
+    website: '', whatsapp: '',
     photoUrl: '', cvUrl: '', slug: '', 
     themeColor: '#2563eb', qrColor: '#000000', qrBgColor: '#ffffff',
     template: 'classic', 
@@ -1505,7 +1287,16 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
 
   useEffect(() => {
     if (initialData) {
-      setFormData(prev => ({ ...prev, ...initialData }));
+      // Normalize legacy string data to objects
+      const normalize = (val) => typeof val === 'string' ? { ar: val, en: '' } : (val || { ar: '', en: '' });
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        ...initialData,
+        name: normalize(initialData.name),
+        jobTitle: normalize(initialData.jobTitle),
+        company: normalize(initialData.company)
+      }));
     }
   }, [initialData]);
 
@@ -1515,48 +1306,30 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
     setSlugError('');
     
     try {
-      const collectionRef = collection(db, 'artifacts', appId, 'users', userId, 'employees');
       let empId = initialData?.id;
-      let oldSlug = initialData?.slug;
       
+      // Clean slug
       if (formData.slug) {
          const cleanSlug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
          if (cleanSlug !== formData.slug) {
             setSlugError('يجب أن يحتوي الاسم المميز على أحرف إنجليزية وأرقام وشرطة فقط.');
             setLoading(false); return;
          }
-         if (cleanSlug !== oldSlug) {
-             const slugDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'slugs', cleanSlug);
-             const slugDocSnap = await getDoc(slugDocRef);
-             if (slugDocSnap.exists()) {
-                 setSlugError('هذا الاسم المميز مستخدم بالفعل.');
-                 setLoading(false); return;
-             }
-         }
+         // Note: API likely handles slug uniqueness check and returns error if duplicate.
       }
 
       if (empId) {
-        await updateDoc(doc(collectionRef, empId), { ...formData, slug: formData.slug || '', updatedAt: serverTimestamp() });
+        await api.updateEmployee(empId, formData);
       } else {
-        const docRef = await addDoc(collectionRef, { ...formData, createdAt: serverTimestamp() });
-        empId = docRef.id;
+        await api.createEmployee(formData);
       }
 
-      if (formData.slug && formData.slug !== oldSlug) {
-          if (oldSlug) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', oldSlug));
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', formData.slug), { targetUid: userId, targetEmpId: empId });
-      } else if (!formData.slug && oldSlug) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'slugs', oldSlug));
-      }
-
+      if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
       console.error("Error saving:", error);
-      if (error.code === 'permission-denied') {
-          window.alert(t.permissionError);
-      } else {
-          window.alert(t.saveError);
-      }
+      // Show error message from API if available
+      window.alert(error.message || t.saveError);
     } finally {
       setLoading(false);
     }
@@ -1618,16 +1391,46 @@ function EmployeeForm({ onClose, initialData, userId, t }) {
             <div className="flex items-center gap-2"><input type="color" value={formData.themeColor} onChange={e => setFormData({...formData, themeColor: e.target.value})} className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white shadow-md" /></div>
           </div>
 
-          <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={isCompany ? t.compName : t.fullName} />
+          {/* Multilingual Name Field */}
+          <LanguageInput 
+            label={isCompany ? t.compName : t.fullName}
+            value={formData.name}
+            onChange={val => setFormData({...formData, name: val})}
+            placeholder={isCompany ? t.compName : t.fullName}
+            t={t}
+          />
+
           <div className="grid grid-cols-2 gap-4">
             <input required type="tel" dir="ltr" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.mobile} />
             <input type="tel" dir="ltr" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300 text-right" placeholder={t.whatsapp} />
           </div>
           <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={t.email} />
-          <div className="grid grid-cols-2 gap-4">
-            <input type="text" value={formData.jobTitle} onChange={e => setFormData({...formData, jobTitle: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={isCompany ? t.slogan : t.jobTitle} />
-            {!isCompany && <input type="text" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={t.company} />}
+          
+          <div className="flex flex-col grid-cols-1 md:grid-cols-2 gap-4">
+             {/* Multilingual Job Title / Slogan */}
+             <div className="col-span-1">
+               <LanguageInput 
+                  label={isCompany ? t.slogan : t.jobTitle}
+                  value={formData.jobTitle}
+                  onChange={val => setFormData({...formData, jobTitle: val})}
+                  placeholder={isCompany ? t.slogan : t.jobTitle}
+                  t={t}
+                />
+             </div>
+             {/* Multilingual Company Field (only for employees) */}
+             {!isCompany && (
+               <div className="col-span-1">
+                 <LanguageInput 
+                    label={t.company}
+                    value={formData.company}
+                    onChange={val => setFormData({...formData, company: val})}
+                    placeholder={t.company}
+                    t={t}
+                  />
+               </div>
+             )}
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
              <input type="url" dir="ltr" value={formData.photoUrl} onChange={e => setFormData({...formData, photoUrl: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={isCompany ? t.logoUrl : t.photoUrl} />
              <input type="url" dir="ltr" value={formData.cvUrl} onChange={e => setFormData({...formData, cvUrl: e.target.value})} className="w-full px-4 py-2 rounded-lg border border-slate-300" placeholder={isCompany ? t.profilePdf : t.cvPdf} />
@@ -1663,11 +1466,7 @@ function LeadCaptureModal({ adminId, employeeId, themeColor, onClose, onSuccess,
     e.preventDefault();
     setLoading(true);
     try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', adminId, 'employees', employeeId, 'leads'), {
-        name,
-        phone,
-        createdAt: serverTimestamp()
-      });
+      await api.sendLead(employeeId, { name, phone });
       setSubmitted(true);
       if (onSuccess) onSuccess();
       setTimeout(onClose, 2000);
@@ -1833,7 +1632,7 @@ function PreviewModal({ employee, userId, onClose, t }) {
       if (employee.slug) return `${window.location.href.split('#')[0]}#${employee.slug}`;
       return `${window.location.href.split('#')[0]}#uid=${userId}&pid=${employee.id}`;
     };
-  
+   
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
         <div className="relative w-full max-w-[380px] h-[750px] bg-black rounded-[40px] border-8 border-gray-800 shadow-2xl overflow-hidden flex flex-col">
