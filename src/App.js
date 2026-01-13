@@ -1588,3 +1588,530 @@ function PreviewModal({ employee, userId, onClose, t }) {
       </div>
     );
   }
+
+function ProductsManagerModal({ userId, employee, onClose, t }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      const productsRef = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
+      const snapshot = await getDocs(productsRef);
+      const productsList = [];
+      snapshot.forEach(doc => productsList.push({ id: doc.id, ...doc.data() }));
+      setProducts(productsList);
+    } catch (error) {
+      console.error('Error loading products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveProduct = async (productData) => {
+    try {
+      if (editingProduct) {
+        const productRef = doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', editingProduct.id);
+        await updateDoc(productRef, productData);
+      } else {
+        const productsRef = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products');
+        await addDoc(productsRef, { ...productData, createdAt: serverTimestamp() });
+      }
+      await loadProducts();
+      setShowForm(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error('Error saving product:', error);
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm(t.confirmDelete || 'Are you sure?')) return;
+    try {
+      const productRef = doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'products', productId);
+      await deleteDoc(productRef);
+      await loadProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <ShoppingBag size={24} className="text-blue-600" />
+            <h2 className="text-xl font-bold text-slate-800">{t.manageProducts || 'Manage Products'}</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="text-center py-8 text-slate-400">{t.loading}</div>
+          ) : showForm ? (
+            <ProductForm
+              product={editingProduct}
+              onSave={handleSaveProduct}
+              onCancel={() => {
+                setShowForm(false);
+                setEditingProduct(null);
+              }}
+              t={t}
+            />
+          ) : (
+            <>
+              <button
+                onClick={() => setShowForm(true)}
+                className="w-full mb-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={20} /> {t.addProduct || 'Add Product'}
+              </button>
+
+              {products.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Package size={48} className="mx-auto mb-3 opacity-20" />
+                  <p>{t.noProducts || 'No products yet'}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {products.map(product => (
+                    <div key={product.id} className="bg-slate-50 rounded-xl p-4 flex gap-4">
+                      <div className="w-20 h-20 bg-slate-200 rounded-lg overflow-hidden flex-shrink-0">
+                        {product.imageUrl ? (
+                          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-400">
+                            <ImageIcon size={24} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-slate-800 truncate">{product.name}</h3>
+                        <p className="text-sm text-slate-500 line-clamp-2">{product.description}</p>
+                        {product.price && (
+                          <p className="text-sm font-bold text-blue-600 mt-1">{product.price}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingProduct(product);
+                            setShowForm(true);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductForm({ product, onSave, onCancel, t }) {
+  const [formData, setFormData] = useState({
+    name: product?.name || '',
+    description: product?.description || '',
+    price: product?.price || '',
+    imageUrl: product?.imageUrl || '',
+    link: product?.link || ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">{t.productName || 'Product Name'}</label>
+        <input
+          type="text"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">{t.productDescription || 'Description'}</label>
+        <textarea
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          rows="3"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">{t.productPrice || 'Price'}</label>
+        <input
+          type="text"
+          value={formData.price}
+          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="100 SAR"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">{t.productImage || 'Image URL'}</label>
+        <input
+          type="url"
+          value={formData.imageUrl}
+          onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="https://..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">{t.productLink || 'Purchase Link'}</label>
+        <input
+          type="url"
+          value={formData.link}
+          onChange={(e) => setFormData({ ...formData, link: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="https://..."
+        />
+      </div>
+
+      <div className="flex gap-3 pt-4">
+        <button
+          type="submit"
+          className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+        >
+          {t.save || 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors"
+        >
+          {t.cancel || 'Cancel'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function StoriesManagerModal({ userId, employee, onClose, t }) {
+  const [stories, setStories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    loadStories();
+  }, []);
+
+  const loadStories = async () => {
+    try {
+      const storiesRef = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
+      const snapshot = await getDocs(storiesRef);
+      const storiesList = [];
+      snapshot.forEach(doc => storiesList.push({ id: doc.id, ...doc.data() }));
+      storiesList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setStories(storiesList);
+    } catch (error) {
+      console.error('Error loading stories:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveStory = async (storyData) => {
+    try {
+      const storiesRef = collection(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories');
+      await addDoc(storiesRef, { ...storyData, createdAt: serverTimestamp() });
+      await loadStories();
+      setShowForm(false);
+    } catch (error) {
+      console.error('Error saving story:', error);
+    }
+  };
+
+  const handleDeleteStory = async (storyId) => {
+    if (!window.confirm(t.confirmDelete || 'Are you sure?')) return;
+    try {
+      const storyRef = doc(db, 'artifacts', appId, 'users', userId, 'employees', employee.id, 'stories', storyId);
+      await deleteDoc(storyRef);
+      await loadStories();
+    } catch (error) {
+      console.error('Error deleting story:', error);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <CircleDashed size={24} className="text-pink-600" />
+            <h2 className="text-xl font-bold text-slate-800">{t.manageStories || 'Manage Stories'}</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="text-center py-8 text-slate-400">{t.loading}</div>
+          ) : showForm ? (
+            <StoryForm
+              onSave={handleSaveStory}
+              onCancel={() => setShowForm(false)}
+              t={t}
+            />
+          ) : (
+            <>
+              <button
+                onClick={() => setShowForm(true)}
+                className="w-full mb-4 py-3 bg-pink-600 text-white rounded-xl font-bold hover:bg-pink-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={20} /> {t.addStory || 'Add Story'}
+              </button>
+
+              {stories.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <CircleDashed size={48} className="mx-auto mb-3 opacity-20" />
+                  <p>{t.noStories || 'No stories yet'}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {stories.map(story => (
+                    <div key={story.id} className="relative aspect-[9/16] rounded-xl overflow-hidden group">
+                      {story.type === 'video' ? (
+                        <video src={story.mediaUrl} className="w-full h-full object-cover" />
+                      ) : (
+                        <img src={story.mediaUrl} alt="Story" className="w-full h-full object-cover" />
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => handleDeleteStory(story.id)}
+                          className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      {story.type === 'video' && (
+                        <div className="absolute top-2 right-2 bg-black/70 text-white p-1 rounded-full">
+                          <PlayCircle size={16} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StoryForm({ onSave, onCancel, t }) {
+  const [formData, setFormData] = useState({
+    type: 'image',
+    mediaUrl: '',
+    productId: ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">{t.storyType || 'Story Type'}</label>
+        <select
+          value={formData.type}
+          onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+        >
+          <option value="image">{t.image || 'Image'}</option>
+          <option value="video">{t.video || 'Video'}</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-bold text-slate-700 mb-2">
+          {formData.type === 'video' ? (t.videoUrl || 'Video URL') : (t.imageUrl || 'Image URL')}
+        </label>
+        <input
+          type="url"
+          value={formData.mediaUrl}
+          onChange={(e) => setFormData({ ...formData, mediaUrl: e.target.value })}
+          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          placeholder="https://..."
+          required
+        />
+      </div>
+
+      <div className="flex gap-3 pt-4">
+        <button
+          type="submit"
+          className="flex-1 py-3 bg-pink-600 text-white rounded-xl font-bold hover:bg-pink-700 transition-colors"
+        >
+          {t.save || 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors"
+        >
+          {t.cancel || 'Cancel'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function StoryViewer({ stories, adminId, employeeId, onClose, products, trackLead, t }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef(null);
+  const currentStory = stories[currentIndex];
+
+  useEffect(() => {
+    setProgress(0);
+    const duration = currentStory?.type === 'video' ? 15000 : 5000;
+    const interval = 50;
+    const increment = (interval / duration) * 100;
+
+    timerRef.current = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          handleNext();
+          return 0;
+        }
+        return prev + increment;
+      });
+    }, interval);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [currentIndex]);
+
+  const handleNext = () => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      onClose();
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
+  };
+
+  const handleProductClick = (productId) => {
+    if (trackLead) {
+      trackLead('product_interest', productId);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+      <div className="w-full h-full max-w-md relative">
+        <div className="absolute top-4 left-4 right-4 flex gap-1 z-10">
+          {stories.map((_, idx) => (
+            <div key={idx} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white transition-all duration-100"
+                style={{ width: idx === currentIndex ? `${progress}%` : idx < currentIndex ? '100%' : '0%' }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-20 text-white bg-black/30 p-2 rounded-full hover:bg-black/50 transition-colors"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="w-full h-full" onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          if (x < rect.width / 2) handlePrev();
+          else handleNext();
+        }}>
+          {currentStory?.type === 'video' ? (
+            <video
+              key={currentStory.id}
+              src={currentStory.mediaUrl}
+              className="w-full h-full object-contain"
+              autoPlay
+              muted
+              playsInline
+            />
+          ) : (
+            <img
+              key={currentStory.id}
+              src={currentStory.mediaUrl}
+              alt="Story"
+              className="w-full h-full object-contain"
+            />
+          )}
+        </div>
+
+        {currentStory?.productId && products && (
+          <div className="absolute bottom-20 left-4 right-4">
+            {products
+              .filter(p => p.id === currentStory.productId)
+              .map(product => (
+                <div
+                  key={product.id}
+                  onClick={() => handleProductClick(product.id)}
+                  className="bg-white/90 backdrop-blur-sm rounded-xl p-4 flex gap-3 cursor-pointer hover:bg-white transition-colors"
+                >
+                  {product.imageUrl && (
+                    <img src={product.imageUrl} className="w-16 h-16 rounded-lg object-cover" />
+                  )}
+                  <div className="flex-1">
+                    <h3 className="font-bold text-slate-800">{product.name}</h3>
+                    {product.price && (
+                      <p className="text-sm font-bold text-blue-600">{product.price}</p>
+                    )}
+                  </div>
+                  <ArrowRight className="text-slate-400" size={20} />
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
