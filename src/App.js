@@ -1212,7 +1212,7 @@ function ProfileView({ data: profileData, user, lang, toggleLang, t }) {
               </div>
           )}
 
-          <div className="px-6 relative flex-1">
+          <div className="px-6 pt-[45px] relative flex-1">
              {activeTab === 'info' && renderAvatar()}
              {activeTab === 'info' ? renderInfoTab() : renderProductsTab()}
           </div>
